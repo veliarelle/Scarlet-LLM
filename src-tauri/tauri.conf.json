@@ -16,7 +16,8 @@
         "width": 1200,
         "height": 800,
         "minWidth": 360,
-        "minHeight": 480
+        "minHeight": 480,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --ignore-gpu-blocklist --enable-gpu-rasterization --enable-zero-copy"
       }
     ],
     "security": {

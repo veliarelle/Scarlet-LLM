@@ -303,6 +303,7 @@ async fn generate_openai_image(
     params: &serde_json::Map<String, serde_json::Value>,
 ) -> Result<ImageGenResponse, String> {
     let base = base_url.trim_end_matches('/');
+    let use_openai_array_field = base.contains("api.openai.com");
     let method = if attachments.is_empty() { "generations" } else { "edits" };
     let endpoint = if let Some(root) = base.strip_suffix("/v1beta") {
         format!("{root}/v1/images/{method}")
@@ -344,9 +345,13 @@ async fn generate_openai_image(
             if IMG_STRIP.contains(&k.as_str()) {
                 continue;
             }
+            if model == "gpt-image-2" && k == "input_fidelity" {
+                continue;
+            }
             form = form.text(k.clone(), v.as_str().map(ToString::to_string).unwrap_or_else(|| v.to_string()));
         }
 
+        let image_field = if use_openai_array_field { "image[]" } else { "image" };
         for att in attachments.iter().filter(|a| a.mime_type.starts_with("image/")) {
             let bytes = base64::engine::general_purpose::STANDARD
                 .decode(&att.data)
@@ -355,7 +360,7 @@ async fn generate_openai_image(
                 .file_name(att.name.clone())
                 .mime_str(&att.mime_type)
                 .map_err(|e| format!("attachment mime: {e}"))?;
-            form = form.part("image", part);
+            form = form.part(image_field, part);
         }
 
         let mut req = client.post(&endpoint).multipart(form);
@@ -563,6 +568,7 @@ pub async fn save_image(
     app: AppHandle,
     data_url: String,
     default_name: String,
+    title: Option<String>,
 ) -> Result<bool, String> {
     use tauri_plugin_dialog::DialogExt;
 
@@ -586,7 +592,7 @@ pub async fn save_image(
     let path = app
         .dialog()
         .file()
-        .set_title("Сохранить изображение")
+        .set_title(title.unwrap_or_else(|| "Сохранить изображение".to_string()))
         .set_file_name(format!("{stem}.{ext}"))
         .add_filter("Image", &[ext])
         .blocking_save_file();

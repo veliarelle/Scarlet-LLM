@@ -27,6 +27,7 @@
   const scaledWidth = $derived(viewportWidth > 0 ? `${viewportWidth / uiScale()}px` : "100vw");
   const scaledHeight = $derived(viewportHeight > 0 ? `${viewportHeight / uiScale()}px` : "100vh");
   const scaleValue = $derived(String(uiScale()));
+  const scaleTransform = $derived(`scale(${scaleValue})`);
 
   // Применяем тему + кастомные цвета + ui_scale + translucency
   $effect(() => {
@@ -113,7 +114,12 @@
 </script>
 
 <div class="viewport">
-  <div class="app-scale" style:width={scaledWidth} style:height={scaledHeight} style:zoom={scaleValue}>
+  <div
+    class="app-scale"
+    style:width={scaledWidth}
+    style:height={scaledHeight}
+    style:transform={scaleTransform}
+  >
     <div class="root">
       <Sidebar />
       <main class="main">
@@ -139,6 +145,7 @@
   .app-scale {
     position: relative;
     overflow: hidden;
+    transform-origin: top left;
   }
   .root {
     display: flex;

@@ -22,6 +22,7 @@ export interface Prompt {
 }
 
 export type Theme = "dark" | "light" | "custom";
+export type Language = "ru" | "en";
 
 export const COLOR_VARS = [
   "bg",
@@ -40,6 +41,7 @@ export const COLOR_VARS = [
 export type ColorVar = (typeof COLOR_VARS)[number];
 
 export interface Settings {
+  language: Language;
   active_proxy_id: string | null;
   active_preset_id: string | null;
   active_model: string | null;
@@ -66,6 +68,7 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
+  language: "ru",
   active_proxy_id: null,
   active_preset_id: null,
   active_model: null,

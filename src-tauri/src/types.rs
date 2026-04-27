@@ -188,6 +188,9 @@ pub struct PresetMeta {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
+    #[serde(default = "default_language")]
+    pub language: String,
+
     #[serde(default)]
     pub active_proxy_id: Option<String>,
     #[serde(default)]
@@ -250,6 +253,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            language: default_language(),
             active_proxy_id: None,
             active_preset_id: None,
             active_model: None,
@@ -279,6 +283,9 @@ impl Default for Settings {
 
 fn default_ui_scale() -> f32 {
     1.0
+}
+fn default_language() -> String {
+    "ru".to_string()
 }
 fn default_bar_blur() -> u32 {
     8

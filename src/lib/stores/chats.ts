@@ -1,5 +1,6 @@
 import { get, writable } from "svelte/store";
 import { api } from "$lib/api/invoke";
+import { tr } from "$lib/i18n";
 import type { Attachment, Chat, ChatMeta, Message, Role, VariationMeta } from "$lib/types/chat";
 import { uid } from "$lib/utils/id";
 import { settings } from "./settings";
@@ -60,7 +61,8 @@ export async function ensureChat(initialUserContent: string): Promise<Chat> {
   const curr = get(activeChat);
   if (curr) return curr;
 
-  const title = initialUserContent.slice(0, 40) + (initialUserContent.length > 40 ? "…" : "");
+  const titleSource = initialUserContent.trim() || get(tr)("sidebar.newChat");
+  const title = titleSource.slice(0, 40) + (titleSource.length > 40 ? "…" : "");
   const s = get(settings);
 
   if (isIncognito()) {

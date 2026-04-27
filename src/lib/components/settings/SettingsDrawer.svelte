@@ -1,5 +1,6 @@
 <script lang="ts">
   import { X } from "lucide-svelte";
+  import { tr } from "$lib/i18n";
   import { settingsOpen } from "$lib/stores/ui";
   import GeneralTab from "./GeneralTab.svelte";
   import ParametersTab from "./ParametersTab.svelte";
@@ -11,14 +12,14 @@
   type Tab = "general" | "params" | "reasoning" | "prompts" | "tools" | "appearance";
   let tab = $state<Tab>("general");
 
-  const TABS: { id: Tab; label: string }[] = [
-    { id: "general", label: "General" },
-    { id: "params", label: "Parameters" },
-    { id: "reasoning", label: "Reasoning" },
-    { id: "prompts", label: "Prompts" },
-    { id: "tools", label: "Tools" },
-    { id: "appearance", label: "Appearance" },
-  ];
+  const TABS = $derived<{ id: Tab; label: string }[]>([
+    { id: "general", label: $tr("settings.tabs.general") },
+    { id: "params", label: $tr("settings.tabs.params") },
+    { id: "reasoning", label: $tr("settings.tabs.reasoning") },
+    { id: "prompts", label: $tr("settings.tabs.prompts") },
+    { id: "tools", label: $tr("settings.tabs.tools") },
+    { id: "appearance", label: $tr("settings.tabs.appearance") },
+  ]);
 
   function close() {
     settingsOpen.set(false);
@@ -36,10 +37,10 @@
     onclick={onOverlay}
     onkeydown={(e) => e.key === "Escape" && close()}
   >
-    <div class="drawer" role="dialog" aria-modal="true" aria-label="Настройки">
+    <div class="drawer" role="dialog" aria-modal="true" aria-label={$tr("settings.title")}>
       <div class="header">
-        <span>Настройки</span>
-        <button class="close-btn" onclick={close} aria-label="Закрыть">
+        <span>{$tr("settings.title")}</span>
+        <button class="close-btn" onclick={close} aria-label={$tr("common.close")}>
           <X size={18} />
         </button>
       </div>
@@ -87,7 +88,7 @@
     animation: fadeIn 0.15s;
   }
   .drawer {
-    width: min(480px, 100vw);
+    width: min(480px, 100%);
     background: var(--bg-2);
     border-left: 1px solid var(--border);
     display: flex;
@@ -116,7 +117,6 @@
     align-items: center;
     justify-content: space-between;
     padding: 16px 18px;
-    padding-top: calc(16px + env(safe-area-inset-top));
     border-bottom: 1px solid var(--border);
     font-size: 15px;
     font-weight: 600;

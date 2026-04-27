@@ -1,39 +1,205 @@
 # Scarlet LLM
 
-Scarlet LLM is a Tauri + SvelteKit desktop frontend for working with LLM
-proxies, chats, presets, tools, themes, and local app settings.
+Scarlet LLM is a Tauri 2 + SvelteKit desktop and Android frontend for LLM
+chat, image generation, proxy profiles, presets, attachments, themes, and local
+app settings.
+
+The app is aimed at OpenAI-compatible proxies and native OpenAI, Anthropic, and
+Google/Gemini-style providers. It is currently beta software.
+
+## Features
+
+- Chat with OpenAI, Anthropic, Google, and OpenAI-compatible APIs;
+- Local oai-reserve proxy manager, together with API keys support;
+- Image generation mode for supported Google and OpenAI image models.
+- File and image attachments in chats and image-generation requests;
+- Prompt and parameter managers. Scarlet LLM does not send anything by default;
+- Chat history, message variations, forks, and regeneration;
+- Themes, background image, translucency, and UI scale controls.
+
+## Plans
+
+- Agent/tool execution;
+- Full import/export for profiles and backups;
+- Proper English/Русский localization;
+- Chat groups (claude-like projects);
+
+## Requirements
+
+Install Node.js, npm, Rust, and the platform dependencies required by Tauri.
+
+On Arch Linux:
+
+```bash
+sudo pacman -S --needed \
+  webkit2gtk-4.1 \
+  base-devel \
+  curl \
+  wget \
+  file \
+  openssl \
+  appmenu-gtk-module \
+  libappindicator-gtk3 \
+  librsvg \
+  xdotool
+```
+
+Install Java/Android tooling only if you need Android builds.
 
 ## Development
 
-```sh
+Install JavaScript dependencies:
+
+```bash
 npm install
+```
+
+Run the web frontend in development mode:
+
+```bash
 npm run dev
+```
+
+Run the Tauri desktop app in development mode:
+
+```bash
+npm run tauri dev
+```
+
+Check the frontend:
+
+```bash
 npm run check
 ```
 
-## UI scale layout bug
+Check the Rust backend:
 
-The UI scale setting is stored as `settings.ui_scale` and exposed to CSS as
-`--ui-scale`. The broken version applied it with CSS `zoom` directly on the
-main `.root` element while that same element had `height: 100vh`.
-
-That combination is unsafe for this app: `100vh` is measured before the visual
-zoom is applied, so a scale above `1` makes the already viewport-sized layout
-render larger than the window. The bottom and right edges are clipped, fixed
-panels no longer line up with the scaled content, and the whole interface looks
-shifted. A scale below `1` creates the opposite mismatch: the rendered UI becomes
-smaller than the viewport, leaving dead space and misaligned overlays.
-
-The fix is to avoid `zoom` for the root layout. The app now uses a fixed
-`.scale-shell` wrapper with inverse logical dimensions:
-
-```css
-width: calc(100vw / var(--ui-scale, 1));
-height: calc(100vh / var(--ui-scale, 1));
-transform: scale(var(--ui-scale, 1));
-transform-origin: top left;
+```bash
+cd src-tauri
+cargo check
 ```
 
-After the transform is applied, the shell visually fits the viewport again, and
-the sidebar, top bar, chat area, and settings drawer stay in the same coordinate
-space.
+Build only the static frontend:
+
+```bash
+npm run build
+```
+
+This only writes the web assets to `build/`. It does not create a desktop or
+Android application.
+
+## Build: Linux Desktop
+
+From the project root:
+
+```bash
+npm install
+npm run tauri build
+```
+
+Build output is generated under:
+
+```text
+src-tauri/target/release/bundle/
+```
+
+Depending on the host and Tauri bundle configuration, this can include AppImage,
+Debian, and RPM packages.
+
+## Build: Windows
+
+The most reliable way to build Windows packages is on Windows itself:
+
+```bash
+npm install
+npm run tauri build
+```
+
+Tauri can create Windows `.msi` installers only on Windows. If building Windows
+from Linux, use the NSIS installer target.
+
+### Cross-build Windows NSIS from Arch Linux
+
+Install tools:
+
+```bash
+sudo pacman -S --needed nsis llvm lld clang
+rustup target add x86_64-pc-windows-msvc
+cargo install --locked cargo-xwin
+```
+
+For cross-compilation, set the bundle target in `src-tauri/tauri.conf.json` to
+NSIS only:
+
+```json
+"bundle": {
+  "active": true,
+  "targets": ["nsis"]
+}
+```
+
+Then build:
+
+```bash
+npm install
+npm run tauri build -- --runner cargo-xwin --target x86_64-pc-windows-msvc
+```
+
+Expected output:
+
+```text
+src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/
+```
+
+## Build: Android
+
+Android builds require the Android SDK, NDK, Java, and a configured Tauri
+Android target. This repository already contains the generated Android project
+under `src-tauri/gen/android/`.
+
+Debug build:
+
+```bash
+npm install
+npm run tauri android build -- --debug
+```
+
+Release build:
+
+```bash
+npm install
+npm run tauri android build
+```
+
+Typical APK output:
+
+```text
+src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
+src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
+```
+
+Release signing uses:
+
+```text
+src-tauri/gen/android/keystore.properties
+```
+
+That file and the keystore are intentionally ignored by git because they contain
+private signing data.
+
+Install an APK on a USB-connected Android device:
+
+```bash
+~/Android/Sdk/platform-tools/adb devices
+~/Android/Sdk/platform-tools/adb install -r \
+  "src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk"
+```
+
+If Android rejects an update because the old app was signed with a different
+key:
+
+```bash
+~/Android/Sdk/platform-tools/adb uninstall dev.scarlet.llm
+~/Android/Sdk/platform-tools/adb install \
+  "src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk"
+```

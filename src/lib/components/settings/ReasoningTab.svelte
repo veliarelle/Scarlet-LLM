@@ -1,5 +1,6 @@
 <script lang="ts">
   import { settings } from "$lib/stores/settings";
+  import { tr } from "$lib/i18n";
   import Section from "./Section.svelte";
   import Row from "./Row.svelte";
   import Toggle from "./Toggle.svelte";
@@ -11,12 +12,12 @@
   }
 </script>
 
-<Section title="Reasoning">
-  <Row label="Включить reasoning" hint="отправлять reasoning_effort с запросом">
+<Section title={$tr("reasoning.section")}>
+  <Row label={$tr("reasoning.enabled")} hint={$tr("reasoning.enabledHint")}>
     <Toggle value={$settings.reasoning.enabled} onChange={(v) => patchR({ enabled: v })} />
   </Row>
   {#if $settings.reasoning.enabled}
-    <Row label="Уровень" hint="low/medium/high">
+    <Row label={$tr("reasoning.level")} hint="low/medium/high">
       <Segmented
         value={$settings.reasoning.effort}
         onChange={(v) => patchR({ effort: v })}
@@ -27,7 +28,7 @@
         ]}
       />
     </Row>
-    <Row label="Отправлять effort" hint="можно выкл, если модель не поддерживает">
+    <Row label={$tr("reasoning.sendEffort")} hint={$tr("reasoning.sendEffortHint")}>
       <Toggle
         value={$settings.reasoning.send_effort}
         onChange={(v) => patchR({ send_effort: v })}

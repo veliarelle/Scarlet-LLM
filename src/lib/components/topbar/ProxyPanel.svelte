@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Server, X, Plus, Pencil, Trash2, Eye, EyeOff } from "lucide-svelte";
+  import { tr } from "$lib/i18n";
   import { proxies } from "$lib/stores/proxies";
   import { settings } from "$lib/stores/settings";
   import { models } from "$lib/stores/models";
@@ -48,7 +49,7 @@
   }
 
   async function remove(p: Proxy) {
-    if (!confirm(`Удалить «${p.name}»?`)) return;
+    if (!confirm($tr("proxy.deleteConfirm", { name: p.name }))) return;
     await proxies.remove(p.id);
     if ($settings.active_proxy_id === p.id) {
       await settings.patch({ active_proxy_id: null, active_model: null });
@@ -58,7 +59,7 @@
 
   async function add() {
     const p = await proxies.create({
-      name: "Новая прокси",
+      name: $tr("proxy.new"),
       base_url: "",
       key: "",
       kind: "openai_compat",
@@ -71,15 +72,15 @@
 <div class="panel" use:clickOutside={close}>
   <div class="panel-hdr">
     <Server size={15} color="var(--accent)" />
-    <span>Прокси</span>
-    <button class="hdr-close" onclick={close} aria-label="Закрыть">
+    <span>{$tr("proxy.panelTitle")}</span>
+    <button class="hdr-close" onclick={close} aria-label={$tr("common.close")}>
       <X size={16} />
     </button>
   </div>
 
   <div class="proxy-list">
     {#if $proxies.length === 0}
-      <div class="empty">Нет прокси</div>
+      <div class="empty">{$tr("proxy.empty")}</div>
     {/if}
     {#each $proxies as p (p.id)}
       <div class="entry" class:active={$settings.active_proxy_id === p.id}>
@@ -88,22 +89,22 @@
             <div class="dot" class:active={$settings.active_proxy_id === p.id}></div>
             <div class="info">
               <span class="name">{p.name}</span>
-              <span class="url">{p.base_url || "Нет URL"}</span>
+              <span class="url">{p.base_url || $tr("proxy.noUrl")}</span>
             </div>
           </button>
           <button
             class="icon-btn"
-            title="Редактировать"
+            title={$tr("common.edit")}
             onclick={() => startEdit(p)}
-            aria-label="Редактировать"
+            aria-label={$tr("common.edit")}
           >
             <Pencil size={14} />
           </button>
           <button
             class="icon-btn"
-            title="Удалить"
+            title={$tr("common.delete")}
             onclick={() => remove(p)}
-            aria-label="Удалить"
+            aria-label={$tr("common.delete")}
           >
             <Trash2 size={14} />
           </button>
@@ -115,7 +116,7 @@
               class="text-input"
               bind:value={buffers[p.id].name}
               onblur={() => saveEdit(p)}
-              placeholder="Название"
+              placeholder={$tr("proxy.namePlaceholder")}
             />
             <input
               class="text-input"
@@ -129,13 +130,13 @@
                 type={showPwdMap[p.id] ? "text" : "password"}
                 bind:value={buffers[p.id].key}
                 onblur={() => saveEdit(p)}
-                placeholder="API key"
+                placeholder={$tr("proxy.apiKey")}
               />
               <button
                 class="icon-btn"
                 onclick={() =>
                   (showPwdMap = { ...showPwdMap, [p.id]: !showPwdMap[p.id] })}
-                aria-label="Показать ключ"
+                aria-label={$tr("proxy.showKey")}
               >
                 {#if showPwdMap[p.id]}
                   <EyeOff size={15} />
@@ -160,7 +161,7 @@
   </div>
 
   <button class="add-btn" onclick={add}>
-    <Plus size={15} /> Добавить прокси
+    <Plus size={15} /> {$tr("proxy.add")}
   </button>
 </div>
 

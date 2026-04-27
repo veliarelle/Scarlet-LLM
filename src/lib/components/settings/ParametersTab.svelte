@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Plus, Trash2 } from "lucide-svelte";
+  import { tr } from "$lib/i18n";
   import { settings } from "$lib/stores/settings";
   import { uid } from "$lib/utils/id";
   import type { ParamEntry } from "$lib/types/settings";
@@ -18,12 +19,12 @@
   }
 
   async function addFromJson() {
-    const json = prompt('Введите JSON-объект, например {"my_param": 0.5, "stop": ["<END>"]}');
+    const json = prompt($tr("params.jsonPrompt", { example: '{"my_param": 0.5, "stop": ["<END>"]}' }));
     if (!json) return;
     try {
       const obj = JSON.parse(json);
       if (obj === null || typeof obj !== "object" || Array.isArray(obj)) {
-        alert("Ожидается объект {key: value}");
+        alert($tr("params.objectExpected"));
         return;
       }
       const entries: ParamEntry[] = Object.entries(obj).map(([k, v]) => ({
@@ -34,7 +35,7 @@
       }));
       await setParams([...$settings.params, ...entries]);
     } catch {
-      alert("Некорректный JSON");
+      alert($tr("params.invalidJson"));
     }
   }
 
@@ -47,7 +48,7 @@
   }
 </script>
 
-<Section title="Sampling parameters">
+<Section title={$tr("params.section")}>
   <div class="params">
     {#each $settings.params as p (p.id)}
       <div class="row">
@@ -64,17 +65,17 @@
           oninput={(e) => update(p.id, { value: (e.target as HTMLInputElement).value })}
           placeholder="value"
         />
-        <button class="del-btn" onclick={() => remove(p.id)} aria-label="Удалить параметр">
+        <button class="del-btn" onclick={() => remove(p.id)} aria-label={$tr("params.delete")}>
           <Trash2 size={14} color="var(--text-3)" />
         </button>
       </div>
     {/each}
     <div class="actions">
       <button class="add-btn" onclick={addParam}>
-        <Plus size={14} /> Добавить параметр
+        <Plus size={14} /> {$tr("params.add")}
       </button>
       <button class="add-btn" onclick={addFromJson}>
-        <Plus size={14} /> Из JSON
+        <Plus size={14} /> {$tr("params.addFromJson")}
       </button>
     </div>
   </div>

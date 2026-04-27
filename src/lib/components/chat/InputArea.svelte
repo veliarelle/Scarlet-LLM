@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Paperclip, Send, Settings as SettingsIcon, Square, X, FileText, Image as ImageIcon } from "lucide-svelte";
+  import { tr } from "$lib/i18n";
   import { settingsOpen } from "$lib/stores/ui";
   import type { Attachment } from "$lib/types/chat";
   import { uid } from "$lib/utils/id";
@@ -106,7 +107,7 @@
               {/if}
             </span>
             <span class="att-name" title={att.name}>{att.name}</span>
-            <button class="att-rm" onclick={() => removeAttachment(att.id)} title="Убрать">
+            <button class="att-rm" onclick={() => removeAttachment(att.id)} title={$tr("input.removeAttachment")}>
               <X size={10} />
             </button>
           </div>
@@ -116,7 +117,7 @@
     <div class="input-box">
       <button
         class="icon-btn"
-        title="Прикрепить файл"
+        title={$tr("input.attachFile")}
         onclick={openFilePicker}
       >
         <Paperclip size={18} />
@@ -125,7 +126,7 @@
         bind:this={textareaEl}
         bind:value={text}
         rows="1"
-        placeholder="Сообщение Scarlet…"
+        placeholder={$tr("input.placeholder")}
         onkeydown={onKey}
         disabled={disabled && !busy}
         class="textarea"
@@ -133,7 +134,7 @@
       <div class="input-right">
         <button
           class="icon-btn"
-          title="Настройки"
+          title={$tr("settings.title")}
           onclick={() => settingsOpen.set(true)}
         >
           <SettingsIcon size={18} />
@@ -143,10 +144,10 @@
           <button
             class="send-btn stop"
             class:active={canStop}
-            title={canStop ? "Остановить" : "Ожидание ответа"}
+            title={canStop ? $tr("input.stop") : $tr("input.waiting")}
             onclick={() => onStop?.()}
             disabled={!canStop}
-            aria-label="Остановить"
+            aria-label={$tr("input.stop")}
           >
             <Square
               size={14}
@@ -160,7 +161,7 @@
             class:active={canSend}
             onclick={submit}
             disabled={!canSend}
-            aria-label="Отправить"
+            aria-label={$tr("input.send")}
           >
             <Send size={16} color={canSend ? "white" : "var(--text-3)"} />
           </button>

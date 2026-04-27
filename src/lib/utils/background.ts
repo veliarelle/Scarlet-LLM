@@ -26,13 +26,12 @@ export function readBg(): BgState {
   }
 }
 
-export function writeBgImage(dataUrl: string) {
+export function writeBgImage(dataUrl: string, errorMessage?: string) {
   try {
     localStorage.setItem(KEY_IMG, dataUrl);
   } catch (e) {
     throw new Error(
-      "Изображение слишком большое для хранения. Сожми/уменьши и попробуй снова. " +
-        String(e)
+      `${errorMessage ?? "Изображение слишком большое для хранения. Сожми/уменьши и попробуй снова."} ${String(e)}`
     );
   }
 }
