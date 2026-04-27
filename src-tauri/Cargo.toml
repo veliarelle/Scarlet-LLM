@@ -28,3 +28,6 @@ anyhow = "1"
 eventsource-stream = "0.2"
 base64 = "0.22"
 tauri-plugin-dialog = "2"
+
+[target.'cfg(any(target_os = "linux", target_os = "dragonfly", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))'.dependencies]
+webkit2gtk = { version = "2", features = ["v2_40"] }

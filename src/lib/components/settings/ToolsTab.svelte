@@ -1,5 +1,6 @@
 <script lang="ts">
   import { settings } from "$lib/stores/settings";
+  import { tr } from "$lib/i18n";
   import Section from "./Section.svelte";
   import Row from "./Row.svelte";
   import Toggle from "./Toggle.svelte";
@@ -21,7 +22,7 @@
       toolDefsError = "";
       await settings.patch({ tool_definitions: toolDefsText });
     } catch {
-      toolDefsError = "Невалидный JSON";
+      toolDefsError = $tr("tools.invalidJson");
     }
   }
 
@@ -56,27 +57,27 @@
         saveToolDefs();
       }
     } catch {
-      toolDefsError = "Невалидный JSON";
+      toolDefsError = $tr("tools.invalidJson");
     }
   }
 </script>
 
-<Section title="Capabilities">
-  <Row label="Web search" hint="Встроенный поиск (Anthropic / OpenAI)">
+<Section title={$tr("tools.capabilities")}>
+  <Row label="Web search" hint={$tr("tools.webSearchHint")}>
     <Toggle value={$settings.web_search} onChange={(v) => set("web_search", v)} />
   </Row>
-  <Row label="Agents" hint="Пока не работает — будет реализовано позже">
+  <Row label="Agents" hint={$tr("tools.agentsHint")}>
     <Toggle value={$settings.agents} onChange={(v) => set("agents", v)} />
   </Row>
-  <Row label="Custom tools" hint="Передаёт tool definitions в запрос">
+  <Row label={$tr("tools.customTools")} hint={$tr("tools.customToolsHint")}>
     <Toggle value={$settings.tools} onChange={(v) => set("tools", v)} />
   </Row>
 </Section>
 
 {#if $settings.tools}
-  <Section title="Tool definitions">
+  <Section title={$tr("tools.definitions")}>
     <p class="hint">
-      JSON-массив tool definitions в формате OpenAI function calling. Передаётся в каждый запрос при включённых Custom tools.
+      {$tr("tools.definitionsHint")}
     </p>
     <div class="defs-actions">
       <button class="action-btn" onclick={insertWebSearch}>+ web_search</button>
@@ -92,7 +93,7 @@
     {#if toolDefsError}
       <p class="error">{toolDefsError}</p>
     {:else}
-      <p class="hint">Изменения сохраняются при потере фокуса.</p>
+      <p class="hint">{$tr("tools.savedOnBlur")}</p>
     {/if}
   </Section>
 {/if}

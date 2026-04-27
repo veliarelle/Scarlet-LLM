@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Search, X, Plus, Pin, Pencil, Trash2, MoreVertical } from "lucide-svelte";
   import { onMount } from "svelte";
+  import { tr } from "$lib/i18n";
   import { activeGenerationId, sidebarOpen } from "$lib/stores/ui";
   import { api } from "$lib/api/invoke";
   import {
@@ -102,7 +103,7 @@
     if (!contextMenu) return;
     const id = contextMenu.chatId;
     contextMenu = null;
-    if (!confirm("Удалить чат?")) return;
+    if (!confirm($tr("sidebar.deleteConfirm"))) return;
     await deleteChatById(id);
   }
 
@@ -133,7 +134,7 @@
       <button
         class="icon-btn"
         class:active={searchOpen}
-        title="Поиск"
+        title={$tr("common.search")}
         onclick={() => {
           searchOpen = !searchOpen;
           if (!searchOpen) search = "";
@@ -141,7 +142,7 @@
       >
         <Search size={16} />
       </button>
-      <button class="icon-btn close" title="Закрыть" onclick={close}>
+      <button class="icon-btn close" title={$tr("common.close")} onclick={close}>
         <X size={18} />
       </button>
     </div>
@@ -150,9 +151,9 @@
   {#if searchOpen}
     <div class="search-wrap">
       <Search size={14} color="var(--text-3)" />
-      <input class="search-input" bind:value={search} placeholder="Поиск чатов…" />
+      <input class="search-input" bind:value={search} placeholder={$tr("sidebar.searchPlaceholder")} />
       {#if search}
-        <button onclick={() => (search = "")} aria-label="Очистить">
+        <button onclick={() => (search = "")} aria-label={$tr("sidebar.clear")}>
           <X size={14} color="var(--text-3)" />
         </button>
       {/if}
@@ -161,22 +162,22 @@
 
   <button class="new-chat-btn" onclick={newChat}>
     <Plus size={16} />
-    Новый чат
+    {$tr("sidebar.newChat")}
   </button>
 
   <div class="chat-list">
     {#if pinned.length > 0}
-      <div class="group-label">Закреплённые</div>
+      <div class="group-label">{$tr("sidebar.pinned")}</div>
       {#each pinned as c (c.id)}
         {@render chatItem(c)}
       {/each}
-      <div class="group-label">Чаты</div>
+      <div class="group-label">{$tr("sidebar.chats")}</div>
     {/if}
     {#each unpinned as c (c.id)}
       {@render chatItem(c)}
     {/each}
     {#if sorted.length === 0}
-      <div class="chat-empty">{search ? "Ничего не найдено" : "Чатов пока нет"}</div>
+      <div class="chat-empty">{search ? $tr("sidebar.noResults") : $tr("sidebar.empty")}</div>
     {/if}
   </div>
 </aside>
@@ -215,7 +216,7 @@
     <button
       class="menu-btn"
       onclick={(e) => showMenu(e, c.id)}
-      aria-label="Меню"
+      aria-label={$tr("common.menu")}
     >
       <MoreVertical size={14} color="var(--text-3)" />
     </button>
@@ -233,13 +234,13 @@
   >
     <button onclick={togglePin}>
       <Pin size={14} />
-      {$chatList.find((c) => c.id === contextMenu!.chatId)?.pinned ? "Открепить" : "Закрепить"}
+      {$chatList.find((c) => c.id === contextMenu!.chatId)?.pinned ? $tr("sidebar.unpin") : $tr("sidebar.pin")}
     </button>
     <button onclick={startRename}>
-      <Pencil size={14} /> Переименовать
+      <Pencil size={14} /> {$tr("sidebar.rename")}
     </button>
     <button class="danger" onclick={deleteChat}>
-      <Trash2 size={14} /> Удалить
+      <Trash2 size={14} /> {$tr("common.delete")}
     </button>
   </div>
 {/if}
@@ -310,7 +311,6 @@
     align-items: center;
     justify-content: space-between;
     padding: 16px 14px 10px;
-    padding-top: calc(16px + env(safe-area-inset-top));
     flex-shrink: 0;
   }
   .logo {

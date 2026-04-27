@@ -13,6 +13,7 @@
     Image as ImageIcon,
   } from "lucide-svelte";
   import type { Message } from "$lib/types/chat";
+  import { tr } from "$lib/i18n";
   import { settings } from "$lib/stores/settings";
   import Markdown from "$lib/components/common/Markdown.svelte";
   import { api } from "$lib/api/invoke";
@@ -98,7 +99,7 @@
     let ext = "png";
     const m = displayImageUrl.match(/^data:image\/([a-zA-Z0-9+]+);/);
     if (m) ext = m[1].replace("jpeg", "jpg");
-    await api.saveImage(displayImageUrl, `scarlet-${Date.now()}.${ext}`);
+    await api.saveImage(displayImageUrl, `scarlet-${Date.now()}.${ext}`, $tr("message.saveImageTitle"));
   }
 
   function copy() {
@@ -160,7 +161,7 @@
 >
   <div class="message" class:user={isUser} class:assistant={isAssistant} class:editing>
     <div class="role-row">
-      <span class="role">{isUser ? $settings.user_name || "You" : $settings.assistant_name || "Scarlet"}</span>
+      <span class="role">{isUser ? $settings.user_name || $tr("message.userFallback") : $settings.assistant_name || "Scarlet"}</span>
       {#if isAssistant && displayModel}
         <span class="model-tag" title={displayModel}>{displayModel}</span>
       {/if}
@@ -176,8 +177,8 @@
           bind:this={editAreaEl}
         ></textarea>
         <div class="edit-actions">
-          <button class="btn-sm accent" onclick={saveEdit}>Сохранить</button>
-          <button class="btn-sm" onclick={() => (editing = false)}>Отмена</button>
+          <button class="btn-sm accent" onclick={saveEdit}>{$tr("common.save")}</button>
+          <button class="btn-sm" onclick={() => (editing = false)}>{$tr("common.cancel")}</button>
         </div>
       </div>
     {:else if isEmptyAssistant}
@@ -188,11 +189,11 @@
       <div class="img-wrap">
         <img
           src={displayImageUrl}
-          alt={msg.content || "generated image"}
+          alt={msg.content || $tr("message.generatedImage")}
           class="generated-img"
           loading="lazy"
         />
-        <button class="img-download" title="Скачать" onclick={downloadImage}>
+        <button class="img-download" title={$tr("message.download")} onclick={downloadImage}>
           <Download size={14} />
         </button>
       </div>
@@ -228,23 +229,23 @@
     {#if !editing && !isEmptyAssistant}
       <div class="toolbar" class:visible={hovered}>
         <div class="toolbar-left">
-          <button class="tb-btn" title="Копировать" onclick={copy}>
+          <button class="tb-btn" title={$tr("message.copy")} onclick={copy}>
             {#if copied}
               <Check size={13} color="var(--accent)" />
             {:else}
               <Copy size={13} />
             {/if}
           </button>
-          <button class="tb-btn" title="Редактировать" onclick={startEdit}>
+          <button class="tb-btn" title={$tr("common.edit")} onclick={startEdit}>
             <Pencil size={13} />
           </button>
-          <button class="tb-btn" title="Удалить" onclick={() => onDelete?.()}>
+          <button class="tb-btn" title={$tr("common.delete")} onclick={() => onDelete?.()}>
             <Trash2 size={13} />
           </button>
-          <button class="tb-btn" title="Обрезать до этого сообщения" onclick={() => onRewind?.()}>
+          <button class="tb-btn" title={$tr("message.rewind")} onclick={() => onRewind?.()}>
             <Scissors size={13} />
           </button>
-          <button class="tb-btn" title="Форкнуть отсюда" onclick={() => onFork?.()}>
+          <button class="tb-btn" title={$tr("message.fork")} onclick={() => onFork?.()}>
             <GitFork size={13} />
           </button>
         </div>
@@ -255,7 +256,7 @@
               <button
                 class="tb-btn"
                 disabled={atFirstVar}
-                title="Предыдущий вариант"
+                title={$tr("message.prevVariant")}
                 onclick={() => onPrevVariation?.()}
               >
                 <ChevronLeft size={13} />
@@ -264,7 +265,7 @@
             {/if}
             <button
               class="tb-btn"
-              title={atLastVar ? "Сгенерировать новый вариант" : "Следующий вариант"}
+              title={atLastVar ? $tr("message.regenerateVariant") : $tr("message.nextVariant")}
               onclick={clickNext}
             >
               <ChevronRight size={13} />

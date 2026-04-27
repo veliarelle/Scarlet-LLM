@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Menu } from "lucide-svelte";
+  import { tr } from "$lib/i18n";
   import { proxies } from "$lib/stores/proxies";
   import { settings } from "$lib/stores/settings";
   import { proxyPanelOpen } from "$lib/stores/ui";
@@ -13,7 +14,7 @@
 <div class="wrap">
   <button class="indicator" onclick={() => proxyPanelOpen.update((v) => !v)}>
     <div class="dot" class:active></div>
-    <span class="name">{active?.name ?? "Нет прокси"}</span>
+    <span class="name">{active?.name ?? $tr("proxy.noProxy")}</span>
     <Menu size={14} color="var(--text-3)" />
   </button>
 

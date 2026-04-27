@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Sparkles, ChevronDown, Check, Pencil, RotateCw } from "lucide-svelte";
+  import { tr } from "$lib/i18n";
   import { settings } from "$lib/stores/settings";
   import { models } from "$lib/stores/models";
   import { clickOutside } from "$lib/utils/clickOutside";
@@ -59,7 +60,7 @@
     return m.length > 22 ? m.slice(0, 22) + "…" : m;
   }
 
-  const display = $derived($settings.active_model ?? "Модель");
+  const display = $derived($settings.active_model ?? $tr("model.fallback"));
 </script>
 
 <div class="selector-wrap" use:clickOutside={close}>
@@ -76,21 +77,21 @@
           class="dropdown-item refresh-item"
           onclick={refresh}
           disabled={$models.loading || !$settings.active_proxy_id}
-          title={$settings.active_proxy_id ? "Обновить список моделей" : "Сначала выбери прокси"}
+          title={$settings.active_proxy_id ? $tr("model.refresh") : $tr("model.noProxy")}
         >
           <span class="refresh-icon" class:spin={$models.loading}>
             <RotateCw size={13} />
           </span>
-          <span>Обновить список моделей</span>
+          <span>{$tr("model.refresh")}</span>
         </button>
       </div>
 
       {#if $models.loading}
-        <div class="dropdown-status">Загрузка моделей…</div>
+        <div class="dropdown-status">{$tr("model.loading")}</div>
       {:else if $models.error}
-        <div class="dropdown-status err" title={$models.error}>Ошибка загрузки</div>
+        <div class="dropdown-status err" title={$models.error}>{$tr("model.error")}</div>
       {:else if grouped.length === 0}
-        <div class="dropdown-status">Список пуст</div>
+        <div class="dropdown-status">{$tr("model.empty")}</div>
       {:else}
         {#each grouped as g (g.group)}
           <div class="dropdown-group">{g.group}</div>
@@ -123,12 +124,12 @@
             placeholder="model-id…"
           />
           <button class="dropdown-item" onclick={commitCustom}>
-            <Check size={14} /> Использовать
+            <Check size={14} /> {$tr("model.use")}
           </button>
         </div>
       {:else}
         <button class="dropdown-item" onclick={() => (customMode = true)}>
-          <Pencil size={14} /> Своя модель…
+          <Pencil size={14} /> {$tr("model.custom")}
         </button>
       {/if}
     </div>

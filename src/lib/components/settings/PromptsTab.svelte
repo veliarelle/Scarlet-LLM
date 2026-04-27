@@ -10,6 +10,7 @@
     Save,
     GripVertical,
   } from "lucide-svelte";
+  import { tr } from "$lib/i18n";
   import { settings } from "$lib/stores/settings";
   import {
     deletePreset,
@@ -53,7 +54,7 @@
     const id = uid();
     await setPrompts([
       ...$settings.prompts,
-      { id, name: "Новый промпт", role: "system", content: "", enabled: true },
+      { id, name: $tr("prompts.newPrompt"), role: "system", content: "", enabled: true },
     ]);
     editingId = id;
   }
@@ -134,12 +135,12 @@
   }
 
   async function saveToExisting(id: string) {
-    if (!confirm("Перезаписать пресет текущим набором промптов?")) return;
+    if (!confirm($tr("prompts.overwriteConfirm"))) return;
     await overwritePreset(id, $settings.prompts);
   }
 
   async function delPreset(id: string) {
-    if (!confirm("Удалить пресет?")) return;
+    if (!confirm($tr("prompts.deletePresetConfirm"))) return;
     await deletePreset(id);
     if ($settings.active_preset_id === id) {
       await settings.patch({ active_preset_id: null });
@@ -147,7 +148,7 @@
   }
 
   const activePresetName = $derived(
-    $presetList.find((p) => p.id === $settings.active_preset_id)?.name ?? "Пресеты"
+    $presetList.find((p) => p.id === $settings.active_preset_id)?.name ?? $tr("prompts.activePreset")
   );
 
   const ROLES: Role[] = ["system", "user", "assistant"];
@@ -163,9 +164,9 @@
       </button>
       {#if presetOpen}
         <div class="dropdown">
-          <div class="dropdown-group">Сохранённые пресеты</div>
+          <div class="dropdown-group">{$tr("prompts.savedPresets")}</div>
           {#if $presetList.length === 0}
-            <div class="empty">Пресетов нет</div>
+            <div class="empty">{$tr("prompts.noPresets")}</div>
           {/if}
           {#each $presetList as pr (pr.id)}
             <div class="dropdown-item" class:active={$settings.active_preset_id === pr.id}>
@@ -178,7 +179,7 @@
               <button
                 class="preset-icon danger"
                 onclick={() => delPreset(pr.id)}
-                aria-label="Удалить"
+                aria-label={$tr("common.delete")}
               >
                 <Trash2 size={13} />
               </button>
@@ -195,16 +196,16 @@
                   if (e.key === "Enter") savePresetCreate();
                   if (e.key === "Escape") (showPresetInput = false);
                 }}
-                placeholder="Имя пресета…"
+                placeholder={$tr("prompts.presetNamePlaceholder")}
                 autofocus
               />
-              <button class="save-btn" onclick={savePresetCreate} aria-label="Создать">
+              <button class="save-btn" onclick={savePresetCreate} aria-label={$tr("common.create")}>
                 <Check size={16} />
               </button>
             </div>
           {:else}
             <button class="dropdown-item add" onclick={() => (showPresetInput = true)}>
-              <Plus size={14} /> Создать новый пресет
+              <Plus size={14} /> {$tr("prompts.createNew")}
             </button>
           {/if}
         </div>
@@ -214,11 +215,11 @@
     <button
       class="save-active-btn"
       title={$settings.active_preset_id
-        ? "Сохранить текущие промпты в активный пресет"
-        : "Нет активного пресета — выбери пресет в списке"}
+        ? $tr("prompts.saveToActiveTitle")
+        : $tr("prompts.noActivePreset")}
       onclick={() => $settings.active_preset_id && saveToExisting($settings.active_preset_id)}
       disabled={!$settings.active_preset_id}
-      aria-label="Сохранить в активный пресет"
+      aria-label={$tr("prompts.saveToActive")}
     >
       <Save size={16} />
     </button>
@@ -243,7 +244,7 @@
         <div class="prompt-header" onclick={() => (editingId = editingId === p.id ? null : p.id)}>
           <span
             class="drag-handle"
-            title="Перетащить"
+            title={$tr("prompts.drag")}
             onmousedown={startHandleDrag}
             ontouchstart={startHandleDrag}
             onclick={(e) => e.stopPropagation()}
@@ -251,13 +252,13 @@
             <GripVertical size={14} color="var(--text-3)" />
           </span>
           <div class="move" onclick={(e) => e.stopPropagation()}>
-            <button onclick={() => move(p.id, -1)} disabled={i === 0} aria-label="Выше">
+            <button onclick={() => move(p.id, -1)} disabled={i === 0} aria-label={$tr("prompts.moveUp")}>
               <ArrowUp size={13} />
             </button>
             <button
               onclick={() => move(p.id, 1)}
               disabled={i === $settings.prompts.length - 1}
-              aria-label="Ниже"
+              aria-label={$tr("prompts.moveDown")}
             >
               <ArrowDown size={13} />
             </button>
@@ -265,7 +266,7 @@
           <div onclick={(e) => e.stopPropagation()}>
             <Toggle value={p.enabled} onChange={(v) => update(p.id, { enabled: v })} />
           </div>
-          <span class="name">{p.name || "(без имени)"}</span>
+          <span class="name">{p.name || $tr("prompts.emptyName")}</span>
           <span class="role-badge role-{p.role}">{p.role}</span>
           <button
             class="del-btn"
@@ -273,7 +274,7 @@
               e.stopPropagation();
               remove(p.id);
             }}
-            aria-label="Удалить"
+            aria-label={$tr("common.delete")}
           >
             <Trash2 size={13} color="var(--text-3)" />
           </button>
@@ -286,7 +287,7 @@
                 class="text-input"
                 value={p.name}
                 oninput={(e) => update(p.id, { name: (e.target as HTMLInputElement).value })}
-                placeholder="Название промпта"
+                placeholder={$tr("prompts.namePlaceholder")}
               />
               <select
                 class="select"
@@ -302,7 +303,7 @@
               class="content-area"
               value={p.content}
               oninput={(e) => update(p.id, { content: (e.target as HTMLTextAreaElement).value })}
-              placeholder="Текст промпта… поддержка {'{{user}}'} и {'{{assistant}}'}"
+              placeholder={$tr("prompts.textPlaceholder")}
               rows="5"
             ></textarea>
           </div>
@@ -311,7 +312,7 @@
     {/each}
 
     <button class="add-prompt-btn" onclick={addPrompt}>
-      <Plus size={16} /> Добавить промпт
+      <Plus size={16} /> {$tr("prompts.add")}
     </button>
   </div>
 </div>

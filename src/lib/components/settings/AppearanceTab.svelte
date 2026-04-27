@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { Image as ImageIcon, Trash2, RotateCcw } from "lucide-svelte";
+  import { tr } from "$lib/i18n";
   import { settings } from "$lib/stores/settings";
   import { COLOR_VARS, type ColorVar, type Theme } from "$lib/types/settings";
   import {
@@ -88,7 +89,7 @@
     reader.onload = (ev) => {
       const data = ev.target?.result as string;
       try {
-        writeBgImage(data);
+        writeBgImage(data, $tr("appearance.bgTooLarge"));
         bg = { ...bg, dataUrl: data, hasBg: true };
         applyBackground(bg);
       } catch (err) {
@@ -130,24 +131,24 @@
     await settings.patch({ topbar_blur: Number((e.target as HTMLInputElement).value) });
   }
 
-  const VAR_LABELS: Record<ColorVar, string> = {
-    bg: "Фон (основной)",
-    "bg-2": "Фон сайдбара/drawer",
-    "bg-3": "Фон карточек/инпутов",
-    "bg-4": "Hover-фон",
-    border: "Границы",
-    accent: "Акцент",
-    "accent-h": "Акцент (hover)",
-    "accent-d": "Акцент (тёмный)",
-    text: "Основной текст",
-    "text-2": "Второй уровень текста",
-    "text-3": "Подсказки/placeholder",
-    danger: "Ошибка/удаление",
-  };
+  const VAR_LABELS = $derived<Record<ColorVar, string>>({
+    bg: $tr("appearance.bgMain"),
+    "bg-2": $tr("appearance.bgSidebar"),
+    "bg-3": $tr("appearance.bgCards"),
+    "bg-4": $tr("appearance.hoverBg"),
+    border: $tr("appearance.border"),
+    accent: $tr("appearance.accent"),
+    "accent-h": $tr("appearance.accentHover"),
+    "accent-d": $tr("appearance.accentDark"),
+    text: $tr("appearance.mainText"),
+    "text-2": $tr("appearance.textSecond"),
+    "text-3": $tr("appearance.placeholderText"),
+    danger: $tr("appearance.danger"),
+  });
 </script>
 
-<Section title="Theme">
-  <Row label="Цветовая схема">
+<Section title={$tr("appearance.theme")}>
+  <Row label={$tr("appearance.colorScheme")}>
     <Segmented
       value={$settings.theme}
       onChange={setTheme}
@@ -158,7 +159,7 @@
       ]}
     />
   </Row>
-  <Row label="Размер UI" hint="{$settings.ui_scale.toFixed(2)}x">
+  <Row label={$tr("appearance.uiScale")} hint="{$settings.ui_scale.toFixed(2)}x">
     <input
       type="range"
       class="range"
@@ -172,9 +173,9 @@
 </Section>
 
 {#if $settings.theme === "custom"}
-  <Section title="Custom colors">
+  <Section title={$tr("appearance.customColors")}>
     <p class="hint">
-      Переопределённые цвета сохраняются в settings.json. Сброс возвращает встроенный dark.
+      {$tr("appearance.customHint")}
     </p>
     <div class="color-grid">
       {#each COLOR_VARS as v (v)}
@@ -189,7 +190,7 @@
           <span class="var-name">--{v}</span>
           <span class="var-label">{VAR_LABELS[v]}</span>
           {#if $settings.custom_colors[v]}
-            <button class="row-reset" onclick={() => resetColor(v)} aria-label="Сбросить">
+            <button class="row-reset" onclick={() => resetColor(v)} aria-label={$tr("common.reset")}>
               <RotateCcw size={12} />
             </button>
           {/if}
@@ -197,12 +198,12 @@
       {/each}
     </div>
     <button class="reset-btn" onclick={resetAllColors}>
-      <RotateCcw size={14} /> Сбросить все цвета
+      <RotateCcw size={14} /> {$tr("appearance.resetAllColors")}
     </button>
   </Section>
 {/if}
 
-<Section title="Background">
+<Section title={$tr("appearance.background")}>
   <div class="bg-preview" style:background-image={bg.hasBg ? `url(${bg.dataUrl})` : "none"}>
     {#if !bg.hasBg}
       <ImageIcon size={28} color="var(--text-3)" />
@@ -212,11 +213,11 @@
   <div class="bg-actions">
     <button class="action-btn" onclick={() => fileInput?.click()}>
       <ImageIcon size={14} />
-      {bg.hasBg ? "Сменить" : "Загрузить"}
+      {bg.hasBg ? $tr("appearance.change") : $tr("appearance.upload")}
     </button>
     {#if bg.hasBg}
       <button class="action-btn" onclick={removeBg}>
-        <Trash2 size={14} /> Удалить
+        <Trash2 size={14} /> {$tr("appearance.deleteBg")}
       </button>
     {/if}
     <input type="file" accept="image/*" bind:this={fileInput} onchange={uploadBg} hidden />
@@ -232,20 +233,19 @@
   {/if}
 </Section>
 
-<Section title="Полупрозрачность">
+<Section title={$tr("appearance.translucency")}>
   <p class="hint">
-    Делает сайдбар или верхний бар полупрозрачным с блюром (видно фон под ними).
-    Доступно с фоновым изображением или без.
+    {$tr("appearance.translucencyHint")}
   </p>
-  <Row label="Сайдбар">
+  <Row label={$tr("appearance.sidebar")}>
     <Toggle
       value={$settings.translucent_sidebar}
       onChange={setSidebarTranslucent}
-      label="Полупрозрачный сайдбар"
+      label={$tr("appearance.translucentSidebar")}
     />
   </Row>
   {#if $settings.translucent_sidebar}
-    <Row label="Сила блюра" hint="{$settings.sidebar_blur}px">
+    <Row label={$tr("appearance.blurStrength")} hint="{$settings.sidebar_blur}px">
       <input
         type="range"
         class="range"
@@ -257,15 +257,15 @@
       />
     </Row>
   {/if}
-  <Row label="Верхний бар">
+  <Row label={$tr("appearance.topbar")}>
     <Toggle
       value={$settings.translucent_topbar}
       onChange={setTopbarTranslucent}
-      label="Полупрозрачный верхний бар"
+      label={$tr("appearance.translucentTopbar")}
     />
   </Row>
   {#if $settings.translucent_topbar}
-    <Row label="Сила блюра" hint="{$settings.topbar_blur}px">
+    <Row label={$tr("appearance.blurStrength")} hint="{$settings.topbar_blur}px">
       <input
         type="range"
         class="range"

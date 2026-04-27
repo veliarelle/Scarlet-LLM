@@ -44,8 +44,8 @@ export const api = {
 
   generateImage: (input: ImageGenInput) =>
     invoke<ImageGenResponse>("generate_image", { input }),
-  saveImage: (dataUrl: string, defaultName: string) =>
-    invoke<boolean>("save_image", { dataUrl, defaultName }),
+  saveImage: (dataUrl: string, defaultName: string, title?: string) =>
+    invoke<boolean>("save_image", { dataUrl, defaultName, title }),
 
   listChats: () => invoke<ChatMeta[]>("list_chats"),
   loadChat: (id: string) => invoke<Chat>("load_chat", { id }),

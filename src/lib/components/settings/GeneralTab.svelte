@@ -1,9 +1,15 @@
 <script lang="ts">
   import { settings } from "$lib/stores/settings";
+  import { LANGUAGE_OPTIONS, tr } from "$lib/i18n";
+  import type { Language } from "$lib/types/settings";
   import Section from "./Section.svelte";
   import Row from "./Row.svelte";
+  import Segmented from "./Segmented.svelte";
   import Toggle from "./Toggle.svelte";
 
+  async function setLanguage(v: Language) {
+    await settings.patch({ language: v });
+  }
   async function setUserName(e: Event) {
     await settings.patch({ user_name: (e.target as HTMLInputElement).value });
   }
@@ -23,8 +29,18 @@
   }
 </script>
 
-<Section title="Identity">
-  <Row label="Ваше имя" hint="label у user-сообщений">
+<Section title={$tr("general.interface")}>
+  <Row label={$tr("general.language")} hint={$tr("general.languageHint")}>
+    <Segmented
+      value={$settings.language}
+      onChange={setLanguage}
+      options={LANGUAGE_OPTIONS}
+    />
+  </Row>
+</Section>
+
+<Section title={$tr("general.identity")}>
+  <Row label={$tr("general.userName")} hint={$tr("general.userNameHint")}>
     <input
       class="text-input"
       value={$settings.user_name}
@@ -32,7 +48,7 @@
       placeholder="User"
     />
   </Row>
-  <Row label="Имя ИИ" hint="label у assistant-сообщений">
+  <Row label={$tr("general.assistantName")} hint={$tr("general.assistantNameHint")}>
     <input
       class="text-input"
       value={$settings.assistant_name}
@@ -42,8 +58,8 @@
   </Row>
 </Section>
 
-<Section title="Generation">
-  <Row label="Окно контекста" hint="токены">
+<Section title={$tr("general.generation")}>
+  <Row label={$tr("general.contextWindow")} hint={$tr("general.tokens")}>
     <input
       type="number"
       class="num-input"
@@ -54,7 +70,7 @@
       onchange={setContextWindow}
     />
   </Row>
-  <Row label="Макс. размер ответа" hint="токены">
+  <Row label={$tr("general.maxResponse")} hint={$tr("general.tokens")}>
     <input
       type="number"
       class="num-input"
@@ -65,7 +81,7 @@
       onchange={setMaxTokens}
     />
   </Row>
-  <Row label="Streaming">
+  <Row label={$tr("general.streaming")}>
     <Toggle value={$settings.streaming} onChange={setStreaming} />
   </Row>
 </Section>

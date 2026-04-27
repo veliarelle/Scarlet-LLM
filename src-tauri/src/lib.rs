@@ -4,11 +4,40 @@ mod storage;
 mod types;
 
 use commands::llm::StreamState;
+use tauri::Manager;
 
 #[tauri::command]
 fn ping() -> String {
     "pong from Rust".to_string()
 }
+
+#[cfg(any(
+    target_os = "linux",
+    target_os = "dragonfly",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd",
+))]
+fn force_webview_hardware_acceleration(app: &tauri::App) {
+    if let Some(webview) = app.get_webview_window("main") {
+        let _ = webview.with_webview(|platform_webview| {
+            use webkit2gtk::{HardwareAccelerationPolicy, SettingsExt, WebViewExt};
+
+            if let Some(settings) = platform_webview.inner().settings() {
+                settings.set_hardware_acceleration_policy(HardwareAccelerationPolicy::Always);
+            }
+        });
+    }
+}
+
+#[cfg(not(any(
+    target_os = "linux",
+    target_os = "dragonfly",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd",
+)))]
+fn force_webview_hardware_acceleration(_: &tauri::App) {}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -16,6 +45,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(StreamState::default())
+        .setup(|app| {
+            force_webview_hardware_acceleration(app);
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             ping,
             commands::settings::get_settings,

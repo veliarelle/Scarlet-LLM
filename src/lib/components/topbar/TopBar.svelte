@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Menu, Ghost, ImagePlus } from "lucide-svelte";
+  import { tr } from "$lib/i18n";
   import { sidebarOpen, incognito, imageMode } from "$lib/stores/ui";
   import { activeChat } from "$lib/stores/chats";
   import ModelSelector from "./ModelSelector.svelte";
@@ -20,7 +21,7 @@
   <button
     class="icon-btn mob-menu"
     onclick={() => sidebarOpen.update((v) => !v)}
-    aria-label="Меню"
+    aria-label={$tr("common.menu")}
   >
     <Menu size={18} />
   </button>
@@ -33,9 +34,9 @@
   <div class="right">
     <button
       class="icon-btn desktop-only"
-      title="Показать/скрыть боковую панель"
+      title={$tr("topbar.showHideSidebar")}
       onclick={() => sidebarOpen.update((v) => !v)}
-      aria-label="Toggle sidebar"
+      aria-label={$tr("topbar.showHideSidebar")}
     >
       <Menu size={18} />
     </button>
@@ -43,9 +44,9 @@
     <button
       class="icon-btn"
       class:active={$imageMode}
-      title={$imageMode ? "Переключить в режим чата" : "Переключить в режим генерации изображений"}
+      title={$imageMode ? $tr("topbar.toChatMode") : $tr("topbar.toImageMode")}
       onclick={() => imageMode.update((v) => !v)}
-      aria-label="Режим генерации изображений"
+      aria-label={$tr("topbar.imageMode")}
     >
       <ImagePlus size={18} />
     </button>
@@ -55,12 +56,12 @@
       class:active={$incognito}
       class:disabled={!canToggleIncognito}
       title={!canToggleIncognito
-        ? "Чат уже сохранён — создайте новый, чтобы включить инкогнито"
+        ? $tr("topbar.incognitoSavedChat")
         : $incognito
-          ? "Инкогнито включено"
-          : "Включить инкогнито"}
+          ? $tr("topbar.incognitoOn")
+          : $tr("topbar.incognitoToggle")}
       onclick={toggleIncognito}
-      aria-label="Инкогнито"
+      aria-label={$tr("topbar.incognito")}
       aria-disabled={!canToggleIncognito}
     >
       <Ghost size={18} fill={$incognito && canToggleIncognito ? "currentColor" : "none"} />
@@ -77,7 +78,6 @@
     align-items: center;
     gap: 6px;
     padding: 10px 12px;
-    padding-top: calc(10px + env(safe-area-inset-top));
     border-bottom: 1px solid var(--border);
     min-height: 52px;
     flex-shrink: 0;

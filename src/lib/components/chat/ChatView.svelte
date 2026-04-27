@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Ghost, ImagePlus as ImagePlusIcon } from "lucide-svelte";
   import { api } from "$lib/api/invoke";
+  import { tr } from "$lib/i18n";
   import { settings } from "$lib/stores/settings";
   import { activeGenerationId, imageMode, incognito } from "$lib/stores/ui";
   import {
@@ -79,18 +80,18 @@
     const requestSettings = snapshotSettings();
     const requestStreaming = shouldStream(requestSettings);
     if (!requestSettings.active_proxy_id || !requestSettings.active_model) {
-      lastError = "Сначала выбери прокси и модель";
+      lastError = $tr("chat.pickProxyAndModel");
       return;
     }
     if (isImageGenerationModel(requestSettings)) {
-      lastError = "Эта модель генерирует изображения. Переключись в режим генерации изображений.";
+      lastError = $tr("chat.imageModelInChatError");
       return;
     }
     if (!text && !attachments.length && !lastMsgIsUser) return;
     lastError = null;
 
     if (text || attachments.length) {
-      const title = text || attachments[0]?.name || "Вложение";
+      const title = text || attachments[0]?.name || $tr("chat.attachment");
       await ensureChat(title);
       pushMessage("user", text, null, attachments);
       await persistActive();
@@ -165,7 +166,7 @@
     if (generating) return;
     const requestSettings = snapshotSettings();
     if (!requestSettings.active_proxy_id || !requestSettings.active_model) {
-      lastError = "Сначала выбери прокси и модель";
+      lastError = $tr("chat.pickProxyAndModel");
       return;
     }
     lastError = null;
@@ -177,7 +178,7 @@
     let placeholderId: string | null = null;
 
     try {
-      const title = prompt || attachments[0]?.name || "Изображение";
+      const title = prompt || attachments[0]?.name || $tr("chat.image");
       await ensureChat(title);
       pushMessage("user", prompt, null, attachments);
       const placeholder = pushMessage("assistant", "", requestSettings.active_model);
@@ -229,7 +230,7 @@
 
   async function onForkMessage(id: string) {
     if ($incognito) {
-      lastError = "Форк недоступен в инкогнито (чат не сохраняется на диск)";
+      lastError = $tr("chat.forkIncognitoError");
       return;
     }
     await forkActiveAt(id);
@@ -255,11 +256,11 @@
     const requestSettings = snapshotSettings();
     const requestStreaming = shouldStream(requestSettings);
     if (!requestSettings.active_proxy_id || !requestSettings.active_model) {
-      lastError = "Сначала выбери прокси и модель";
+      lastError = $tr("chat.pickProxyAndModel");
       return;
     }
     if (!msg.image_url && isImageGenerationModel(requestSettings)) {
-      lastError = "Эта модель генерирует изображения. Переключись в режим генерации изображений.";
+      lastError = $tr("chat.imageModelInChatError");
       return;
     }
     if (!$activeChat) return;
@@ -372,13 +373,13 @@
 {#if $incognito}
   <div class="incognito-banner">
     <Ghost size={14} fill="currentColor" />
-    Инкогнито — этот чат не сохранится
+    {$tr("chat.incognitoBanner")}
   </div>
 {/if}
 {#if $imageMode}
   <div class="imgmode-banner">
     <ImagePlusIcon size={14} />
-    Режим генерации изображений
+    {$tr("chat.imageModeBanner")}
   </div>
 {/if}
 
@@ -387,7 +388,7 @@
     <div class="empty-state">
       <div class="empty-card">
         <div class="empty-logo">Scarlet</div>
-        <div class="empty-sub">Начните беседу ниже</div>
+        <div class="empty-sub">{$tr("chat.emptySubtitle")}</div>
       </div>
     </div>
   {:else}
@@ -422,7 +423,7 @@
 {#if lastError}
   <div class="error" role="alert">
     <span class="error-text">{lastError}</span>
-    <button class="error-close" onclick={() => (lastError = null)} title="Закрыть">×</button>
+    <button class="error-close" onclick={() => (lastError = null)} title={$tr("common.close")}>×</button>
   </div>
 {/if}
 
