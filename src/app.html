@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%sveltekit.assets%/favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Scarlet LLM</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root, [data-theme="dark"] {
+        --bg:       oklch(9%  0.015 20);
+        --bg-2:     oklch(13% 0.015 20);
+        --bg-3:     oklch(18% 0.015 20);
+        --bg-4:     oklch(23% 0.015 20);
+        --border:   oklch(28% 0.015 20);
+        --accent:   oklch(56% 0.21  18);
+        --accent-h: oklch(62% 0.21  18);
+        --accent-d: oklch(44% 0.18  18);
+        --text:     oklch(92% 0.008 20);
+        --text-2:   oklch(68% 0.008 20);
+        --text-3:   oklch(44% 0.008 20);
+        --danger:   oklch(58% 0.20  25);
+        --user-msg: var(--accent);
+        --user-text: #fff;
+        --shadow:   0 4px 20px rgba(0,0,0,.5);
+        color-scheme: dark;
+      }
+      [data-theme="light"] {
+        --bg:       oklch(97% 0.005 20);
+        --bg-2:     oklch(94% 0.006 20);
+        --bg-3:     oklch(90% 0.006 20);
+        --bg-4:     oklch(86% 0.006 20);
+        --border:   oklch(80% 0.008 20);
+        --accent:   oklch(50% 0.21  18);
+        --accent-h: oklch(56% 0.21  18);
+        --accent-d: oklch(42% 0.18  18);
+        --text:     oklch(16% 0.01  20);
+        --text-2:   oklch(36% 0.01  20);
+        --text-3:   oklch(56% 0.01  20);
+        --danger:   oklch(52% 0.20  25);
+        --user-msg: var(--accent);
+        --user-text: #fff;
+        --shadow:   0 4px 20px rgba(0,0,0,.15);
+        color-scheme: light;
+      }
+
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { height: 100%; overflow: hidden; }
+      body {
+        font-family: 'DM Sans', system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        font-size: 15px;
+        line-height: 1.65;
+        transition: background .2s, color .2s;
+      }
+      @media (max-width: 599px) {
+        body { font-size: 14px; }
+      }
+      button { background: none; border: none; cursor: pointer; color: inherit; font-family: inherit; font-size: inherit; }
+      input, textarea, select { font-family: inherit; font-size: inherit; color: inherit; background: none; border: none; outline: none; }
+      textarea { resize: none; }
+      a { color: var(--accent); }
+      a:hover { text-decoration: underline; }
+
+      #bg-layer { position: fixed; inset: 0; z-index: 0; background-size: cover; background-position: center; pointer-events: none; }
+      #bg-dim   { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+
+      ::-webkit-scrollbar { width: 5px; height: 5px; }
+      ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    </style>
+    %sveltekit.head%
+  </head>
+  <body data-sveltekit-preload-data="hover">
+    <div id="bg-layer"></div>
+    <div id="bg-dim"></div>
+    <div style="display: contents">%sveltekit.body%</div>
+  </body>
+</html>
