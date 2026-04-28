@@ -45,6 +45,8 @@ const ru = {
   "general.characters": "символы, 0 = без лимита",
   "general.showTokenCounts": "Показывать токены",
   "general.showTokenCountsHint": "оценочное количество токенов в assistant-сообщениях",
+  "general.promptCaching": "Prompt caching",
+  "general.promptCachingHint": "кэширование префикса промпта у поддерживаемых провайдеров",
   "general.tokens": "токены",
   "general.streaming": "Streaming",
   "general.profile": "Профиль",
@@ -205,6 +207,7 @@ const ru = {
 
   "proxy.add": "Добавить прокси",
   "proxy.apiKey": "API key",
+  "proxy.apiKeySaved": "API key сохранён; введите новый для замены",
   "proxy.deleteConfirm": "Удалить «{name}»?",
   "proxy.empty": "Нет прокси",
   "proxy.namePlaceholder": "Название",
@@ -255,6 +258,8 @@ const en: Record<TranslationKey, string> = {
   "general.characters": "characters, 0 = unlimited",
   "general.showTokenCounts": "Show token counts",
   "general.showTokenCountsHint": "estimated token count in assistant messages",
+  "general.promptCaching": "Prompt caching",
+  "general.promptCachingHint": "cache prompt prefixes on supported providers",
   "general.tokens": "tokens",
   "general.streaming": "Streaming",
   "general.profile": "Profile",
@@ -415,6 +420,7 @@ const en: Record<TranslationKey, string> = {
 
   "proxy.add": "Add proxy",
   "proxy.apiKey": "API key",
+  "proxy.apiKeySaved": "API key saved; enter a new one to replace it",
   "proxy.deleteConfirm": "Delete \"{name}\"?",
   "proxy.empty": "No proxies",
   "proxy.namePlaceholder": "Name",

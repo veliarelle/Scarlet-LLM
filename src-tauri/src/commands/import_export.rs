@@ -94,8 +94,7 @@ async fn save_json(
     value: &impl Serialize,
 ) -> Result<bool, String> {
     let (tx, rx) = oneshot::channel();
-    app
-        .dialog()
+    app.dialog()
         .file()
         .set_title(title)
         .set_file_name(default_name)
@@ -114,8 +113,7 @@ async fn save_json(
 
 async fn pick_json(app: &AppHandle, title: &str) -> Result<Option<String>, String> {
     let (tx, rx) = oneshot::channel();
-    app
-        .dialog()
+    app.dialog()
         .file()
         .set_title(title)
         .add_filter("JSON", &["json"])
@@ -174,6 +172,9 @@ pub async fn import_profile(app: AppHandle) -> Result<usize, String> {
     let profile: ProfileExport =
         serde_json::from_str(&text).map_err(|e| format!("parse profile export: {e}"))?;
     let imported = write_presets(&app, profile.presets)?;
-    json_store::write_atomic(&settings_path(&app)?, &sanitize_profile_settings(profile.settings))?;
+    json_store::write_atomic(
+        &settings_path(&app)?,
+        &sanitize_profile_settings(profile.settings),
+    )?;
     Ok(imported)
 }

@@ -39,7 +39,7 @@
   function startEdit(p: Proxy) {
     expandedId = expandedId === p.id ? null : p.id;
     if (expandedId === p.id) {
-      buffers[p.id] = { name: p.name, base_url: p.base_url, key: p.key, kind: p.kind };
+      buffers[p.id] = { name: p.name, base_url: p.base_url, key: "", kind: p.kind };
     }
   }
 
@@ -66,7 +66,7 @@
       kind: "openai_compat",
     });
     expandedId = p.id;
-    buffers[p.id] = { name: p.name, base_url: p.base_url, key: p.key, kind: p.kind };
+    buffers[p.id] = { name: p.name, base_url: p.base_url, key: "", kind: p.kind };
   }
 </script>
 
@@ -131,7 +131,7 @@
                 type={showPwdMap[p.id] ? "text" : "password"}
                 bind:value={buffers[p.id].key}
                 onblur={() => saveEdit(p)}
-                placeholder={$tr("proxy.apiKey")}
+                placeholder={p.has_key ? $tr("proxy.apiKeySaved") : $tr("proxy.apiKey")}
               />
               <button
                 class="icon-btn"

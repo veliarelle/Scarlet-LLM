@@ -82,7 +82,9 @@ fn to_anthropic_content(content: &Value) -> Value {
                 .filter_map(|part| {
                     let t = part.get("type")?.as_str()?;
                     match t {
-                        "text" => Some(json!({ "type": "text", "text": part.get("text")?.as_str()? })),
+                        "text" => {
+                            Some(json!({ "type": "text", "text": part.get("text")?.as_str()? }))
+                        }
                         "image_url" => {
                             let url = part.get("image_url")?.get("url")?.as_str()?;
                             let rest = url.strip_prefix("data:")?;
@@ -108,6 +110,29 @@ fn to_anthropic_content(content: &Value) -> Value {
             Value::Array(converted)
         }
         other => other.clone(),
+    }
+}
+
+fn cache_control_block() -> Value {
+    json!({ "type": "ephemeral" })
+}
+
+fn add_cache_control_to_content(content: Value) -> Value {
+    match content {
+        Value::String(text) => json!([
+            {
+                "type": "text",
+                "text": text,
+                "cache_control": cache_control_block(),
+            }
+        ]),
+        Value::Array(mut blocks) => {
+            if let Some(Value::Object(last)) = blocks.last_mut() {
+                last.insert("cache_control".into(), cache_control_block());
+            }
+            Value::Array(blocks)
+        }
+        other => other,
     }
 }
 
@@ -150,7 +175,30 @@ fn build_body(req: &CompletionRequest, stream: bool) -> Value {
     body.insert("model".into(), Value::String(req.model.clone()));
     body.insert("messages".into(), Value::Array(messages));
     if !system.is_empty() {
-        body.insert("system".into(), Value::String(system));
+        if req.prompt_caching {
+            body.insert(
+                "system".into(),
+                json!([
+                    {
+                        "type": "text",
+                        "text": system,
+                        "cache_control": cache_control_block(),
+                    }
+                ]),
+            );
+        } else {
+            body.insert("system".into(), Value::String(system));
+        }
+    } else if req.prompt_caching {
+        if let Some(Value::Object(first_message)) = body
+            .get_mut("messages")
+            .and_then(Value::as_array_mut)
+            .and_then(|messages| messages.first_mut())
+        {
+            if let Some(content) = first_message.remove("content") {
+                first_message.insert("content".into(), add_cache_control_to_content(content));
+            }
+        }
     }
     if !tools_arr.is_empty() {
         body.insert("tools".into(), Value::Array(tools_arr));
@@ -195,8 +243,8 @@ impl Provider for AnthropicProvider {
         if !status.is_success() {
             return Err(format!("HTTP {status}: {text}"));
         }
-        let parsed: ModelsResp = serde_json::from_str(&text)
-            .map_err(|e| format!("parse models: {e}; body={text}"))?;
+        let parsed: ModelsResp =
+            serde_json::from_str(&text).map_err(|e| format!("parse models: {e}; body={text}"))?;
         Ok(parsed
             .data
             .into_iter()
@@ -225,8 +273,8 @@ impl Provider for AnthropicProvider {
         if !status.is_success() {
             return Err(format!("HTTP {status}: {text}"));
         }
-        let parsed: MessagesResp = serde_json::from_str(&text)
-            .map_err(|e| format!("parse response: {e}; body={text}"))?;
+        let parsed: MessagesResp =
+            serde_json::from_str(&text).map_err(|e| format!("parse response: {e}; body={text}"))?;
         let content = parsed
             .content
             .into_iter()
@@ -255,8 +303,7 @@ impl Provider for AnthropicProvider {
     ) -> Result<(), String> {
         let url = format!("{}/v1/messages", base_url.trim_end_matches('/'));
         let body = build_body(&req, true);
-        let http = add_headers(reqwest::Client::new().post(&url), key, req.web_search)
-            .json(&body);
+        let http = add_headers(reqwest::Client::new().post(&url), key, req.web_search).json(&body);
 
         let resp = tokio::select! {
             biased;

@@ -91,7 +91,29 @@ struct CompletedResponse {
     usage: Option<UsageWire>,
 }
 
-fn build_body(req: &CompletionRequest, stream: bool) -> serde_json::Map<String, Value> {
+fn supports_openai_prompt_cache_controls(base_url: &str) -> bool {
+    base_url.contains("api.openai.com")
+}
+
+fn prompt_cache_key(model: &str) -> String {
+    let model = model
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.') {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>();
+    format!("scarlet-llm-{model}")
+}
+
+fn build_body(
+    req: &CompletionRequest,
+    stream: bool,
+    base_url: &str,
+) -> serde_json::Map<String, Value> {
     // Separate system messages into `instructions`, rest go into `input`
     let mut instructions = String::new();
     let mut input: Vec<Value> = Vec::new();
@@ -123,6 +145,12 @@ fn build_body(req: &CompletionRequest, stream: bool) -> serde_json::Map<String, 
     }
     if stream {
         body.insert("stream".into(), Value::Bool(true));
+    }
+    if req.prompt_caching && supports_openai_prompt_cache_controls(base_url) {
+        body.insert(
+            "prompt_cache_key".into(),
+            Value::String(prompt_cache_key(&req.model)),
+        );
     }
 
     // Merge params with renaming and exclusions
@@ -193,18 +221,24 @@ impl Provider for ResponsesProvider {
         if !key.is_empty() {
             req = req.bearer_auth(key);
         }
-        let resp = req.send().await.map_err(|e| format!("request failed: {e}"))?;
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| format!("request failed: {e}"))?;
         let status = resp.status();
         let text = resp.text().await.map_err(|e| format!("read body: {e}"))?;
         if !status.is_success() {
             return Err(format!("HTTP {status}: {text}"));
         }
-        let parsed: ModelsResp = serde_json::from_str(&text)
-            .map_err(|e| format!("parse models: {e}; body={text}"))?;
+        let parsed: ModelsResp =
+            serde_json::from_str(&text).map_err(|e| format!("parse models: {e}; body={text}"))?;
         Ok(parsed
             .data
             .into_iter()
-            .map(|m| Model { id: m.id, name: m.name })
+            .map(|m| Model {
+                id: m.id,
+                name: m.name,
+            })
             .collect())
     }
 
@@ -215,27 +249,34 @@ impl Provider for ResponsesProvider {
         req: CompletionRequest,
     ) -> Result<CompletionResponse, String> {
         let url = join_url(base_url, "responses");
-        let body = build_body(&req, false);
+        let body = build_body(&req, false, base_url);
         let client = reqwest::Client::new();
         let mut http = client.post(&url).json(&body);
         if !key.is_empty() {
             http = http.bearer_auth(key);
         }
-        let resp = http.send().await.map_err(|e| format!("request failed: {e}"))?;
+        let resp = http
+            .send()
+            .await
+            .map_err(|e| format!("request failed: {e}"))?;
         let status = resp.status();
         let text = resp.text().await.map_err(|e| format!("read body: {e}"))?;
         if !status.is_success() {
             return Err(format!("HTTP {status}: {text}"));
         }
-        let parsed: ResponsesResp = serde_json::from_str(&text)
-            .map_err(|e| format!("parse response: {e}; body={text}"))?;
+        let parsed: ResponsesResp =
+            serde_json::from_str(&text).map_err(|e| format!("parse response: {e}; body={text}"))?;
         let usage = parsed.usage.as_ref().map(|u| TokenUsage {
             prompt_tokens: u.input_tokens,
             completion_tokens: u.output_tokens,
             total_tokens: u.total_tokens,
         });
         let content = extract_text(parsed);
-        Ok(CompletionResponse { content, usage, image_url: None })
+        Ok(CompletionResponse {
+            content,
+            usage,
+            image_url: None,
+        })
     }
 
     async fn complete_stream(
@@ -247,7 +288,7 @@ impl Provider for ResponsesProvider {
         cancel: Arc<Notify>,
     ) -> Result<(), String> {
         let url = join_url(base_url, "responses");
-        let body = build_body(&req, true);
+        let body = build_body(&req, true, base_url);
         let client = reqwest::Client::new();
         let mut http = client.post(&url).json(&body);
         if !key.is_empty() {

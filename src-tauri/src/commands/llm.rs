@@ -1,5 +1,4 @@
 use crate::providers::{provider_for, CompletionRequest, StreamItem};
-use crate::storage::{json_store, proxies_path};
 use crate::types::{Attachment, ChatMessage, CompletionResponse, Model, Proxy, Role, TokenUsage};
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
@@ -23,11 +22,7 @@ impl Default for StreamState {
 }
 
 fn load_proxy(app: &AppHandle, id: &str) -> Result<Proxy, String> {
-    let proxies: Vec<Proxy> = json_store::read_or_default(&proxies_path(app)?)?;
-    proxies
-        .into_iter()
-        .find(|p| p.id == id)
-        .ok_or_else(|| format!("proxy {id} not found"))
+    crate::commands::proxies::find_private(app, id)
 }
 
 #[tauri::command]
@@ -48,6 +43,8 @@ pub struct SendCompletionInput {
     pub tools: Vec<serde_json::Value>,
     #[serde(default)]
     pub web_search: bool,
+    #[serde(default)]
+    pub prompt_caching: bool,
 }
 
 #[tauri::command]
@@ -63,6 +60,7 @@ pub async fn send_completion(
         params: input.params,
         tools: input.tools,
         web_search: input.web_search,
+        prompt_caching: input.prompt_caching,
     };
     provider.complete(&proxy.base_url, &proxy.key, req).await
 }
@@ -91,6 +89,7 @@ pub async fn stream_completion(
         params: input.params,
         tools: input.tools,
         web_search: input.web_search,
+        prompt_caching: input.prompt_caching,
     };
 
     let cancel = Arc::new(Notify::new());
@@ -274,8 +273,8 @@ fn build_image_content(prompt: &str, attachments: &[Attachment]) -> serde_json::
 }
 
 fn image_response_url_from_text(text: &str) -> Result<String, String> {
-    let parsed: ImgApiResponse = serde_json::from_str(text)
-        .map_err(|e| format!("parse response: {e}; body={text}"))?;
+    let parsed: ImgApiResponse =
+        serde_json::from_str(text).map_err(|e| format!("parse response: {e}; body={text}"))?;
 
     let item = parsed
         .data
@@ -304,7 +303,11 @@ async fn generate_openai_image(
 ) -> Result<ImageGenResponse, String> {
     let base = base_url.trim_end_matches('/');
     let use_openai_array_field = base.contains("api.openai.com");
-    let method = if attachments.is_empty() { "generations" } else { "edits" };
+    let method = if attachments.is_empty() {
+        "generations"
+    } else {
+        "edits"
+    };
     let endpoint = if let Some(root) = base.strip_suffix("/v1beta") {
         format!("{root}/v1/images/{method}")
     } else if base.ends_with("/v1") {
@@ -337,9 +340,17 @@ async fn generate_openai_image(
             .text("prompt", prompt.to_string());
 
         const IMG_STRIP: &[&str] = &[
-            "max_tokens", "max_completion_tokens", "temperature", "top_p",
-            "frequency_penalty", "presence_penalty", "logprobs", "top_logprobs",
-            "stream", "stop", "stream_options",
+            "max_tokens",
+            "max_completion_tokens",
+            "temperature",
+            "top_p",
+            "frequency_penalty",
+            "presence_penalty",
+            "logprobs",
+            "top_logprobs",
+            "stream",
+            "stop",
+            "stream_options",
         ];
         for (k, v) in params {
             if IMG_STRIP.contains(&k.as_str()) {
@@ -348,11 +359,23 @@ async fn generate_openai_image(
             if model == "gpt-image-2" && k == "input_fidelity" {
                 continue;
             }
-            form = form.text(k.clone(), v.as_str().map(ToString::to_string).unwrap_or_else(|| v.to_string()));
+            form = form.text(
+                k.clone(),
+                v.as_str()
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| v.to_string()),
+            );
         }
 
-        let image_field = if use_openai_array_field { "image[]" } else { "image" };
-        for att in attachments.iter().filter(|a| a.mime_type.starts_with("image/")) {
+        let image_field = if use_openai_array_field {
+            "image[]"
+        } else {
+            "image"
+        };
+        for att in attachments
+            .iter()
+            .filter(|a| a.mime_type.starts_with("image/"))
+        {
             let bytes = base64::engine::general_purpose::STANDARD
                 .decode(&att.data)
                 .map_err(|e| format!("attachment base64 decode: {e}"))?;
@@ -391,7 +414,9 @@ async fn generate_openai_image(
         return Err(format!("API error: {msg}"));
     }
 
-    Ok(ImageGenResponse { url: image_response_url_from_text(&text)? })
+    Ok(ImageGenResponse {
+        url: image_response_url_from_text(&text)?,
+    })
 }
 
 fn build_openai_image_json_body(
@@ -400,9 +425,17 @@ fn build_openai_image_json_body(
     params: &serde_json::Map<String, serde_json::Value>,
 ) -> serde_json::Map<String, serde_json::Value> {
     const IMG_STRIP: &[&str] = &[
-        "max_tokens", "max_completion_tokens", "temperature", "top_p",
-        "frequency_penalty", "presence_penalty", "logprobs", "top_logprobs",
-        "stream", "stop", "stream_options",
+        "max_tokens",
+        "max_completion_tokens",
+        "temperature",
+        "top_p",
+        "frequency_penalty",
+        "presence_penalty",
+        "logprobs",
+        "top_logprobs",
+        "stream",
+        "stop",
+        "stream_options",
     ];
     let mut body: serde_json::Map<String, serde_json::Value> = params
         .iter()
@@ -470,6 +503,7 @@ async fn generate_openrouter_image(
             }],
             tools: Vec::new(),
             web_search: false,
+            prompt_caching: false,
         },
     );
     let resp = tokio::select! {
@@ -509,21 +543,21 @@ pub async fn generate_image(
             let model_lc = input.model.to_lowercase();
             if model_lc.contains("gemini") && model_lc.contains("image") {
                 let provider = provider_for(&proxy.kind);
-                let task = provider
-                    .complete(
-                        &proxy.base_url,
-                        &proxy.key,
-                        CompletionRequest {
-                            model: input.model,
-                            messages: vec![ChatMessage {
-                                role: Role::User,
-                                content: build_image_content(&input.prompt, &input.attachments),
-                            }],
-                            params: input.params,
-                            tools: Vec::new(),
-                            web_search: false,
-                        },
-                    );
+                let task = provider.complete(
+                    &proxy.base_url,
+                    &proxy.key,
+                    CompletionRequest {
+                        model: input.model,
+                        messages: vec![ChatMessage {
+                            role: Role::User,
+                            content: build_image_content(&input.prompt, &input.attachments),
+                        }],
+                        params: input.params,
+                        tools: Vec::new(),
+                        web_search: false,
+                        prompt_caching: false,
+                    },
+                );
                 let resp = tokio::select! {
                     biased;
                     _ = cancel.notified() => return Err("generation cancelled".to_string()),

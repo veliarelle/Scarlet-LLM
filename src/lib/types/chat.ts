@@ -98,6 +98,7 @@ export interface SendCompletionInput {
   params?: Record<string, unknown>;
   tools?: unknown[];
   web_search?: boolean;
+  prompt_caching?: boolean;
 }
 
 export interface ImageGenInput {

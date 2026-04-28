@@ -236,6 +236,7 @@
 
 <style>
   .input-outer {
+    flex-shrink: 0;
     padding: 0 24px 18px;
     width: 100%;
   }
