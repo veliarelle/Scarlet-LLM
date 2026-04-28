@@ -56,6 +56,18 @@ pub struct Message {
     pub attachments: Vec<Attachment>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatSummary {
+    pub id: String,
+    pub content: String,
+    pub prompt: String,
+    pub after_message_id: String,
+    #[serde(default)]
+    pub model: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Chat {
     pub id: String,
@@ -68,6 +80,8 @@ pub struct Chat {
     pub model: Option<String>,
     #[serde(default)]
     pub proxy_id: Option<String>,
+    #[serde(default)]
+    pub summary: Option<ChatSummary>,
     #[serde(default)]
     pub messages: Vec<Message>,
 }
@@ -111,6 +125,8 @@ pub enum ProxyKind {
     AnthropicNative,
     GoogleNative,
     OpenaiResponses,
+    #[serde(rename = "openrouter")]
+    OpenRouter,
 }
 
 impl Default for ProxyKind {
@@ -168,12 +184,40 @@ pub struct Prompt {
     pub enabled: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PromptUtilities {
+    #[serde(default)]
+    pub summarize_prompt_id: Option<String>,
+    #[serde(default = "default_summarize_prompt")]
+    pub summarize_default_prompt: String,
+    #[serde(default)]
+    pub auto_summarize: bool,
+}
+
+impl Default for PromptUtilities {
+    fn default() -> Self {
+        Self {
+            summarize_prompt_id: None,
+            summarize_default_prompt: default_summarize_prompt(),
+            auto_summarize: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct PresetUtilities {
+    #[serde(default)]
+    pub summarize_prompt_id: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Preset {
     pub id: String,
     pub name: String,
     #[serde(default)]
     pub prompts: Vec<Prompt>,
+    #[serde(default)]
+    pub utilities: PresetUtilities,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -211,6 +255,10 @@ pub struct Settings {
     pub context_window: u32,
     #[serde(default = "default_max_tokens")]
     pub max_tokens: u32,
+    #[serde(default = "default_max_message_size")]
+    pub max_message_size: u32,
+    #[serde(default)]
+    pub show_token_counts: bool,
 
     #[serde(default = "default_params")]
     pub params: Vec<ParamEntry>,
@@ -220,6 +268,8 @@ pub struct Settings {
 
     #[serde(default)]
     pub prompts: Vec<Prompt>,
+    #[serde(default)]
+    pub utilities: PromptUtilities,
 
     #[serde(default)]
     pub web_search: bool,
@@ -263,9 +313,12 @@ impl Default for Settings {
             streaming: default_streaming(),
             context_window: default_context_window(),
             max_tokens: default_max_tokens(),
+            max_message_size: default_max_message_size(),
+            show_token_counts: false,
             params: default_params(),
             reasoning: ReasoningConfig::default(),
             prompts: Vec::new(),
+            utilities: PromptUtilities::default(),
             web_search: false,
             agents: false,
             tools: false,
@@ -306,8 +359,14 @@ fn default_context_window() -> u32 {
 fn default_max_tokens() -> u32 {
     2048
 }
+fn default_max_message_size() -> u32 {
+    0
+}
 fn default_effort() -> String {
     "medium".to_string()
+}
+fn default_summarize_prompt() -> String {
+    "Summarize the conversation so it can replace the earlier chat history. Keep the user's goals, decisions, constraints, important facts, file/image context, unresolved tasks, and the latest state. Be concise but specific. Do not answer the user; only produce the summary.".to_string()
 }
 fn default_true() -> bool {
     true

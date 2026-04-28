@@ -414,6 +414,75 @@ fn build_openai_image_json_body(
     body
 }
 
+fn build_openrouter_image_params(
+    model: &str,
+    params: &serde_json::Map<String, serde_json::Value>,
+) -> serde_json::Map<String, serde_json::Value> {
+    const STRIP: &[&str] = &[
+        "stream",
+        "stream_options",
+        "tools",
+        "tool_choice",
+        "parallel_tool_calls",
+        "max_tokens",
+        "max_completion_tokens",
+    ];
+    let mut body: serde_json::Map<String, serde_json::Value> = params
+        .iter()
+        .filter(|(k, _)| !STRIP.contains(&k.as_str()))
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+
+    let model_lc = model.to_lowercase();
+    let modalities = if model_lc.contains("gemini") || model_lc.starts_with("google/") {
+        json!(["image", "text"])
+    } else {
+        json!(["image"])
+    };
+    body.insert("modalities".into(), modalities);
+    body
+}
+
+async fn generate_openrouter_image(
+    cancel: Arc<Notify>,
+    base_url: &str,
+    key: &str,
+    model: String,
+    prompt: &str,
+    attachments: &[Attachment],
+    params: serde_json::Map<String, serde_json::Value>,
+) -> Result<ImageGenResponse, String> {
+    let prompt = if prompt.trim().is_empty() {
+        "Use the attached image as reference."
+    } else {
+        prompt
+    };
+    let provider = provider_for(&crate::types::ProxyKind::OpenRouter);
+    let task = provider.complete(
+        base_url,
+        key,
+        CompletionRequest {
+            params: build_openrouter_image_params(&model, &params),
+            model,
+            messages: vec![ChatMessage {
+                role: Role::User,
+                content: build_image_content(prompt, attachments),
+            }],
+            tools: Vec::new(),
+            web_search: false,
+        },
+    );
+    let resp = tokio::select! {
+        biased;
+        _ = cancel.notified() => return Err("generation cancelled".to_string()),
+        r = task => r?,
+    };
+    let url = resp
+        .image_url
+        .ok_or_else(|| format!("no image in OpenRouter response; body={}", resp.content))?;
+    Ok(ImageGenResponse { url })
+}
+
 #[tauri::command]
 pub async fn generate_image(
     app: AppHandle,
@@ -536,6 +605,19 @@ pub async fn generate_image(
 
         ProxyKind::AnthropicNative => {
             Err("Image generation is not supported for Anthropic".to_string())
+        }
+
+        ProxyKind::OpenRouter => {
+            generate_openrouter_image(
+                cancel.clone(),
+                &proxy.base_url,
+                &proxy.key,
+                input.model,
+                &input.prompt,
+                &input.attachments,
+                input.params,
+            )
+            .await
         }
 
         _ => {

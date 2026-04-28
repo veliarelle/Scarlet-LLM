@@ -9,11 +9,15 @@
     Check,
     Save,
     GripVertical,
+    Download,
+    Upload,
   } from "lucide-svelte";
   import { tr } from "$lib/i18n";
   import { settings } from "$lib/stores/settings";
   import {
     deletePreset,
+    exportPreset,
+    importPreset,
     loadPresetIntoSettings,
     overwritePreset,
     presetList,
@@ -22,7 +26,7 @@
   } from "$lib/stores/presets";
   import { uid } from "$lib/utils/id";
   import { clickOutside } from "$lib/utils/clickOutside";
-  import type { Prompt } from "$lib/types/settings";
+  import { DEFAULT_SUMMARIZE_PROMPT, type Prompt, type PromptUtilities } from "$lib/types/settings";
   import type { Role } from "$lib/types/chat";
   import Toggle from "./Toggle.svelte";
 
@@ -50,6 +54,10 @@
     await settings.patch({ prompts: next });
   }
 
+  async function setUtilities(patch: Partial<PromptUtilities>) {
+    await settings.patch({ utilities: { ...$settings.utilities, ...patch } });
+  }
+
   async function addPrompt() {
     const id = uid();
     await setPrompts([
@@ -67,6 +75,9 @@
 
   async function remove(id: string) {
     await setPrompts($settings.prompts.filter((p) => p.id !== id));
+    if ($settings.utilities.summarize_prompt_id === id) {
+      await setUtilities({ summarize_prompt_id: null });
+    }
     if (editingId === id) editingId = null;
   }
 
@@ -129,14 +140,18 @@
 
   async function savePresetCreate() {
     if (!newPresetName.trim()) return;
-    await savePresetFromCurrent(newPresetName.trim(), $settings.prompts);
+    await savePresetFromCurrent(newPresetName.trim(), $settings.prompts, $settings.utilities);
     newPresetName = "";
     showPresetInput = false;
   }
 
   async function saveToExisting(id: string) {
     if (!confirm($tr("prompts.overwriteConfirm"))) return;
-    await overwritePreset(id, $settings.prompts);
+    await overwritePreset(id, $settings.prompts, $settings.utilities);
+  }
+
+  async function restoreSummarizePrompt() {
+    await setUtilities({ summarize_default_prompt: DEFAULT_SUMMARIZE_PROMPT });
   }
 
   async function delPreset(id: string) {
@@ -145,6 +160,15 @@
     if ($settings.active_preset_id === id) {
       await settings.patch({ active_preset_id: null });
     }
+  }
+
+  async function onExportPreset() {
+    if (!$settings.active_preset_id) return;
+    await exportPreset($settings.active_preset_id);
+  }
+
+  async function onImportPreset() {
+    await importPreset();
   }
 
   const activePresetName = $derived(
@@ -211,6 +235,25 @@
         </div>
       {/if}
     </div>
+
+    <button
+      class="save-active-btn"
+      title={$tr("prompts.exportPresets")}
+      onclick={onExportPreset}
+      disabled={!$settings.active_preset_id}
+      aria-label={$tr("prompts.exportPresets")}
+    >
+      <Download size={16} />
+    </button>
+
+    <button
+      class="save-active-btn"
+      title={$tr("prompts.importPresets")}
+      onclick={onImportPreset}
+      aria-label={$tr("prompts.importPresets")}
+    >
+      <Upload size={16} />
+    </button>
 
     <button
       class="save-active-btn"
@@ -314,6 +357,56 @@
     <button class="add-prompt-btn" onclick={addPrompt}>
       <Plus size={16} /> {$tr("prompts.add")}
     </button>
+  </div>
+
+  <div class="utilities-section">
+    <div class="section-title">{$tr("prompts.utilities")}</div>
+    <div class="utility-card">
+      <div class="utility-head">
+        <div>
+          <div class="utility-name">Summarize</div>
+          <div class="utility-hint">{$tr("prompts.summarizeHint")}</div>
+        </div>
+        <select
+          class="select utility-select"
+          value={$settings.utilities.summarize_prompt_id ?? ""}
+          onchange={(e) => {
+            const value = (e.target as HTMLSelectElement).value;
+            setUtilities({ summarize_prompt_id: value || null });
+          }}
+        >
+          <option value="">{$tr("prompts.defaultUtilityPrompt")}</option>
+          {#each $settings.prompts as p (p.id)}
+            <option value={p.id}>{p.name || $tr("prompts.emptyName")}</option>
+          {/each}
+        </select>
+      </div>
+
+      {#if !$settings.utilities.summarize_prompt_id}
+        <textarea
+          class="content-area utility-textarea"
+          value={$settings.utilities.summarize_default_prompt}
+          oninput={(e) => setUtilities({ summarize_default_prompt: (e.target as HTMLTextAreaElement).value })}
+          rows="6"
+        ></textarea>
+        <div class="utility-actions">
+          <button class="restore-btn" onclick={restoreSummarizePrompt}>
+            {$tr("prompts.restoreDefault")}
+          </button>
+        </div>
+      {/if}
+
+      <div class="utility-toggle">
+        <div>
+          <div class="utility-name">{$tr("prompts.autoSummarize")}</div>
+          <div class="utility-hint">{$tr("prompts.autoSummarizeHint")}</div>
+        </div>
+        <Toggle
+          value={$settings.utilities.auto_summarize}
+          onChange={(v) => setUtilities({ auto_summarize: v })}
+        />
+      </div>
+    </div>
   </div>
 </div>
 
@@ -628,5 +721,81 @@
     border-color: var(--accent-d);
     color: var(--text-2);
     background: var(--bg-3);
+  }
+
+  .utilities-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 6px;
+  }
+  .section-title {
+    font-size: 11px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 0 2px;
+  }
+  .utility-card {
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .utility-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .utility-name {
+    font-size: 13px;
+    color: var(--text);
+    font-weight: 600;
+  }
+  .utility-hint {
+    margin-top: 3px;
+    font-size: 12px;
+    color: var(--text-3);
+    line-height: 1.4;
+  }
+  .utility-select {
+    width: min(210px, 45%);
+    flex-shrink: 0;
+  }
+  .utility-textarea {
+    min-height: 140px;
+  }
+  .utility-actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+  .utility-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 2px;
+  }
+  .restore-btn {
+    padding: 6px 10px;
+    border-radius: 7px;
+    background: var(--bg-4);
+    color: var(--text-2);
+    font-size: 12px;
+  }
+  .restore-btn:hover {
+    color: var(--text);
+  }
+
+  @media (max-width: 520px) {
+    .utility-head {
+      flex-direction: column;
+    }
+    .utility-select {
+      width: 100%;
+    }
   }
 </style>

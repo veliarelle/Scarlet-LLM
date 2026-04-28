@@ -21,8 +21,21 @@ export interface Prompt {
   enabled: boolean;
 }
 
+export interface PromptUtilities {
+  summarize_prompt_id?: string | null;
+  summarize_default_prompt: string;
+  auto_summarize: boolean;
+}
+
+export interface PresetUtilities {
+  summarize_prompt_id?: string | null;
+}
+
 export type Theme = "dark" | "light" | "custom";
 export type Language = "ru" | "en";
+
+export const DEFAULT_SUMMARIZE_PROMPT =
+  "Summarize the conversation so it can replace the earlier chat history. Keep the user's goals, decisions, constraints, important facts, file/image context, unresolved tasks, and the latest state. Be concise but specific. Do not answer the user; only produce the summary.";
 
 export const COLOR_VARS = [
   "bg",
@@ -51,9 +64,12 @@ export interface Settings {
   streaming: boolean;
   context_window: number;
   max_tokens: number;
+  max_message_size: number;
+  show_token_counts: boolean;
   params: ParamEntry[];
   reasoning: ReasoningConfig;
   prompts: Prompt[];
+  utilities: PromptUtilities;
   web_search: boolean;
   agents: boolean;
   tools: boolean;
@@ -78,12 +94,19 @@ export const DEFAULT_SETTINGS: Settings = {
   streaming: true,
   context_window: 8192,
   max_tokens: 2048,
+  max_message_size: 0,
+  show_token_counts: false,
   params: [
     { id: "tp", key: "temperature", value: "0.7", enabled: true },
     { id: "pp", key: "top_p", value: "0.9", enabled: true },
   ],
   reasoning: { enabled: false, effort: "medium", send_effort: true },
   prompts: [],
+  utilities: {
+    summarize_prompt_id: null,
+    summarize_default_prompt: DEFAULT_SUMMARIZE_PROMPT,
+    auto_summarize: false,
+  },
   web_search: false,
   agents: false,
   tools: false,

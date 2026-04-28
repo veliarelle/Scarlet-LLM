@@ -9,6 +9,7 @@
     addVariation,
     appendToMessage,
     deleteMessage,
+    deleteSummary,
     ensureChat,
     forkActiveAt,
     persistActive,
@@ -17,22 +18,27 @@
     removeMessageById,
     rewindToMessage,
     selectVariation,
+    setSummary,
     setMessageImageUrl,
+    updateSummaryContent,
     updateMessageContent,
   } from "$lib/stores/chats";
-  import type { Attachment, Message } from "$lib/types/chat";
+  import type { Attachment, Chat, ChatMessage, Message } from "$lib/types/chat";
   import { uid } from "$lib/utils/id";
-  import { buildMessages, buildParams, buildTools } from "$lib/utils/buildRequest";
-  import type { Settings } from "$lib/types/settings";
+  import { buildMessages, buildParams, buildTools, estimateContextTokens, transcriptFromMessages } from "$lib/utils/buildRequest";
+  import { DEFAULT_SUMMARIZE_PROMPT, type Settings } from "$lib/types/settings";
   import MessageBubble from "./MessageBubble.svelte";
   import InputArea from "./InputArea.svelte";
+  import SummaryBoundary from "./SummaryBoundary.svelte";
 
   let generating = $state(false);
   let generationStreaming = $state(false);
   let isRegenerating = $state(false);
   let isImageGenerating = $state(false);
+  let isSummarizing = $state(false);
   let lastError = $state<string | null>(null);
   let activeStreamId = $state<string | null>(null);
+  let summarizeStopRequested = false;
 
   const lastMsgIsUser = $derived(
     !!$activeChat &&
@@ -41,6 +47,9 @@
   );
 
   const canStopCurrent = $derived(generating && activeStreamId !== null);
+  const contextUsed = $derived(estimateContextTokens($activeChat?.messages ?? [], $settings, $activeChat?.summary ?? null));
+  const contextWindow = $derived(Math.max(0, Number($settings.context_window ?? 0)));
+  const canSummarize = $derived(!!$activeChat && $activeChat.messages.length > 0 && !generating);
 
   $effect(() => {
     activeGenerationId.set(activeStreamId);
@@ -53,6 +62,7 @@
       params: s.params.map((p) => ({ ...p })),
       reasoning: { ...s.reasoning },
       prompts: s.prompts.map((p) => ({ ...p })),
+      utilities: { ...s.utilities },
       custom_colors: { ...s.custom_colors },
     };
   }
@@ -69,6 +79,20 @@
   function isCancelled(e: unknown): boolean {
     const message = e instanceof Error ? e.message : String(e);
     return message.toLowerCase().includes("generation cancelled");
+  }
+
+  const TRUNCATED_MARKER = "\n\n[message truncated]";
+
+  function maxAssistantChars(settings: Settings): number {
+    const raw = Number(settings.max_message_size ?? 0);
+    return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
+  }
+
+  function limitAssistantMessage(content: string, settings: Settings): string {
+    const limit = maxAssistantChars(settings);
+    if (limit <= 0 || content.length <= limit) return content;
+    if (limit <= TRUNCATED_MARKER.length) return content.slice(0, limit);
+    return content.slice(0, limit - TRUNCATED_MARKER.length) + TRUNCATED_MARKER;
   }
 
   async function send(text: string, attachments: Attachment[] = []) {
@@ -90,6 +114,10 @@
     if (!text && !attachments.length && !lastMsgIsUser) return;
     lastError = null;
 
+    if (!(await maybeAutoSummarize(requestSettings))) {
+      return;
+    }
+
     if (text || attachments.length) {
       const title = text || attachments[0]?.name || $tr("chat.attachment");
       await ensureChat(title);
@@ -97,7 +125,7 @@
       await persistActive();
     }
 
-    const messages = buildMessages($activeChat?.messages ?? [], requestSettings);
+    const messages = buildMessages($activeChat?.messages ?? [], requestSettings, $activeChat?.summary ?? null);
     const params = buildParams(requestSettings);
     const tools = buildTools(requestSettings);
 
@@ -119,9 +147,22 @@
         streamPlaceholderId = placeholder.id;
         const streamId = uid();
         activeStreamId = streamId;
+        let streamedContent = "";
+        let streamLimitReached = false;
         await api.streamCompletion(input, streamId, (ev) => {
           if (ev.type === "chunk") {
-            appendToMessage(placeholder.id, ev.content);
+            if (streamLimitReached) return;
+            const next = streamedContent + ev.content;
+            const limited = limitAssistantMessage(next, requestSettings);
+            if (limited !== next) {
+              streamedContent = limited;
+              streamLimitReached = true;
+              updateMessageContent(placeholder.id, limited);
+              void api.cancelGeneration(streamId);
+            } else {
+              streamedContent = next;
+              appendToMessage(placeholder.id, ev.content);
+            }
           } else if (ev.type === "error") {
             lastError = ev.message;
           }
@@ -134,7 +175,11 @@
         await persistActive();
       } else {
         const resp = await api.sendCompletion(input);
-        const msg = pushMessage("assistant", resp.content, requestSettings.active_model);
+        const msg = pushMessage(
+          "assistant",
+          limitAssistantMessage(resp.content, requestSettings),
+          requestSettings.active_model
+        );
         if (resp.image_url) {
           setMessageImageUrl(msg.id, resp.image_url);
         }
@@ -158,8 +203,147 @@
 
   async function stop() {
     if (activeStreamId) {
+      if (isSummarizing) summarizeStopRequested = true;
       await api.cancelGeneration(activeStreamId);
     }
+  }
+
+  function resolveSummarizePrompt(requestSettings: Settings): string {
+    const mappedId = requestSettings.utilities.summarize_prompt_id;
+    const mapped = mappedId ? requestSettings.prompts.find((p) => p.id === mappedId) : null;
+    return (
+      mapped?.content.trim() ||
+      requestSettings.utilities.summarize_default_prompt.trim() ||
+      DEFAULT_SUMMARIZE_PROMPT
+    );
+  }
+
+  function summarizeTranscript(chat: Chat, boundaryId?: string): string {
+    const boundaryIdx = boundaryId
+      ? chat.messages.findIndex((m) => m.id === boundaryId)
+      : chat.messages.length - 1;
+    const endIdx = boundaryIdx === -1 ? chat.messages.length - 1 : boundaryIdx;
+    const targetMessages = chat.messages.slice(0, endIdx + 1);
+    const existing = chat.summary;
+    if (existing?.content.trim()) {
+      const idx = chat.messages.findIndex((m) => m.id === existing.after_message_id);
+      if (idx !== -1 && idx <= endIdx) {
+        return [
+          "Existing summary of earlier conversation:",
+          existing.content.trim(),
+          "",
+          "Conversation after that summary:",
+          transcriptFromMessages(chat.messages.slice(idx + 1, endIdx + 1)),
+        ].join("\n");
+      }
+    }
+    return transcriptFromMessages(targetMessages);
+  }
+
+  async function runSummarize(chat: Chat, requestSettings: Settings, boundary: Message): Promise<boolean> {
+    const prompt = resolveSummarizePrompt(requestSettings);
+    const messages: ChatMessage[] = [
+      { role: "system", content: prompt },
+      { role: "user", content: `Conversation to compress:\n\n${summarizeTranscript(chat, boundary.id)}` },
+    ];
+
+    lastError = null;
+    generating = true;
+    generationStreaming = false;
+    isSummarizing = true;
+    summarizeStopRequested = false;
+    const streamId = uid();
+    activeStreamId = streamId;
+    let content = "";
+    try {
+      await api.streamCompletion(
+        {
+          proxy_id: requestSettings.active_proxy_id!,
+          model: requestSettings.active_model!,
+          messages,
+          params: buildParams(requestSettings),
+          tools: [],
+          web_search: false,
+        },
+        streamId,
+        (ev) => {
+          if (ev.type === "chunk") {
+            content += ev.content;
+          } else if (ev.type === "error" && !isCancelled(ev.message)) {
+            lastError = ev.message;
+          }
+        }
+      );
+
+      if (summarizeStopRequested || $activeChat?.id !== chat.id) return false;
+
+      const summary = content.trim();
+      if (!summary) {
+        lastError = $tr("chat.summarizeFailed");
+        return false;
+      }
+      const now = new Date().toISOString();
+      setSummary({
+        id: uid(),
+        content: summary,
+        prompt,
+        after_message_id: boundary.id,
+        model: requestSettings.active_model,
+        created_at: now,
+        updated_at: now,
+      });
+      await persistActive();
+      return true;
+    } catch (e) {
+      if (!isCancelled(e)) {
+        lastError = e instanceof Error ? e.message : String(e);
+      }
+      return false;
+    } finally {
+      generating = false;
+      generationStreaming = false;
+      isSummarizing = false;
+      summarizeStopRequested = false;
+      activeStreamId = null;
+      activeGenerationId.set(null);
+    }
+  }
+
+  function contextLimitExceeded(chat: Chat, requestSettings: Settings): boolean {
+    const limit = Math.max(0, Number(requestSettings.context_window ?? 0));
+    return limit > 0 && estimateContextTokens(chat.messages, requestSettings, chat.summary ?? null) > limit;
+  }
+
+  function autoSummarizeBoundary(chat: Chat): Message | null {
+    if (chat.messages.length <= 1) return null;
+    const last = chat.messages[chat.messages.length - 1];
+    const boundaryIndex = last.role === "user" ? chat.messages.length - 2 : chat.messages.length - 1;
+    if (boundaryIndex < 0) return null;
+    const boundary = chat.messages[boundaryIndex];
+    if (chat.summary?.after_message_id === boundary.id) return null;
+    return boundary;
+  }
+
+  async function maybeAutoSummarize(requestSettings: Settings): Promise<boolean> {
+    if (!requestSettings.utilities.auto_summarize) return true;
+    const chat = $activeChat;
+    if (!chat || !contextLimitExceeded(chat, requestSettings)) return true;
+    const boundary = autoSummarizeBoundary(chat);
+    if (!boundary) return true;
+    return runSummarize(chat, requestSettings, boundary);
+  }
+
+  async function summarizeChat() {
+    if (generating || !$activeChat || $activeChat.messages.length === 0) return;
+    const chat = $activeChat;
+    const requestSettings = snapshotSettings();
+    if (!requestSettings.active_proxy_id || !requestSettings.active_model) {
+      lastError = $tr("chat.pickProxyAndModel");
+      return;
+    }
+
+    const boundary = chat.messages[chat.messages.length - 1];
+    await runSummarize(chat, requestSettings, boundary);
   }
 
   async function generateImage(prompt: string, attachments: Attachment[] = []) {
@@ -303,7 +487,7 @@
     const idx = allMessages.findIndex((m) => m.id === msg.id);
     if (idx === -1) return;
     const contextSlice = allMessages.slice(0, idx);
-    const messages = buildMessages(contextSlice, requestSettings);
+    const messages = buildMessages(contextSlice, requestSettings, $activeChat.summary ?? null);
     const params = buildParams(requestSettings);
     const tools = buildTools(requestSettings);
 
@@ -321,6 +505,7 @@
     isRegenerating = true;
     let acc = "";
     let streamVariationAdded = false;
+    let streamLimitReached = false;
     try {
       if (requestStreaming) {
         addVariation(msg.id, "", requestSettings.active_model);
@@ -329,8 +514,15 @@
         activeStreamId = streamId;
         await api.streamCompletion(input, streamId, (ev) => {
           if (ev.type === "chunk") {
-            acc += ev.content;
-            updateMessageContent(msg.id, acc);
+            if (streamLimitReached) return;
+            const next = acc + ev.content;
+            const limited = limitAssistantMessage(next, requestSettings);
+            acc = limited;
+            updateMessageContent(msg.id, limited);
+            if (limited !== next) {
+              streamLimitReached = true;
+              void api.cancelGeneration(streamId);
+            }
           } else if (ev.type === "error") {
             lastError = ev.message;
           }
@@ -345,7 +537,7 @@
         addVariation(msg.id, "", requestSettings.active_model);
         try {
           const resp = await api.sendCompletion(input);
-          updateMessageContent(msg.id, resp.content);
+          updateMessageContent(msg.id, limitAssistantMessage(resp.content, requestSettings));
           if (resp.image_url) {
             setMessageImageUrl(msg.id, resp.image_url);
           }
@@ -367,6 +559,16 @@
       activeStreamId = null;
       activeGenerationId.set(null);
     }
+  }
+
+  async function onSaveSummary(content: string) {
+    updateSummaryContent(content);
+    await persistActive();
+  }
+
+  async function onDeleteSummary() {
+    deleteSummary();
+    await persistActive();
   }
 </script>
 
@@ -405,14 +607,25 @@
           onNextVariation={() => onNextVariation(msg)}
           onRegenerate={() => regenerateMessage(msg)}
         />
+        {#if $activeChat.summary?.after_message_id === msg.id}
+          <SummaryBoundary
+            summary={$activeChat.summary}
+            onSave={onSaveSummary}
+            onDelete={onDeleteSummary}
+          />
+        {/if}
       {/each}
       {#if generating && !generationStreaming && !isRegenerating && !isImageGenerating}
         <div class="msg-group">
           <div class="message">
             <div class="role">{$settings.assistant_name || "Scarlet"}</div>
-            <div class="typing">
-              <span></span><span></span><span></span>
-            </div>
+            {#if isSummarizing}
+              <div class="typing-label">{$tr("chat.summarizing")}</div>
+            {:else}
+              <div class="typing">
+                <span></span><span></span><span></span>
+              </div>
+            {/if}
           </div>
         </div>
       {/if}
@@ -427,7 +640,17 @@
   </div>
 {/if}
 
-<InputArea onSend={send} onStop={stop} busy={generating} canStop={canStopCurrent} canResend={lastMsgIsUser} />
+<InputArea
+  onSend={send}
+  onStop={stop}
+  busy={generating}
+  canStop={canStopCurrent}
+  canResend={lastMsgIsUser}
+  {contextUsed}
+  {contextWindow}
+  onSummarize={summarizeChat}
+  {canSummarize}
+/>
 
 <style>
   .chat-area {
@@ -527,6 +750,10 @@
   }
   .typing span:nth-child(3) {
     animation-delay: 0.36s;
+  }
+  .typing-label {
+    color: var(--text-2);
+    font-size: 13px;
   }
   @keyframes bounce {
     0%,

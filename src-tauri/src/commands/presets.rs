@@ -1,5 +1,5 @@
 use crate::storage::{json_store, presets_dir};
-use crate::types::{Preset, PresetMeta, Prompt};
+use crate::types::{Preset, PresetMeta, PresetUtilities, Prompt};
 use chrono::Utc;
 use std::path::PathBuf;
 use tauri::AppHandle;
@@ -56,12 +56,18 @@ pub fn save_preset(app: AppHandle, preset: Preset) -> Result<Preset, String> {
 }
 
 #[tauri::command]
-pub fn create_preset(app: AppHandle, name: String, prompts: Vec<Prompt>) -> Result<Preset, String> {
+pub fn create_preset(
+    app: AppHandle,
+    name: String,
+    prompts: Vec<Prompt>,
+    utilities: Option<PresetUtilities>,
+) -> Result<Preset, String> {
     let now = Utc::now();
     let preset = Preset {
         id: Uuid::new_v4().to_string(),
         name,
         prompts,
+        utilities: utilities.unwrap_or_default(),
         created_at: now,
         updated_at: now,
     };

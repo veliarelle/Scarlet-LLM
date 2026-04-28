@@ -1,0 +1,125 @@
+.appearance-tab {
+  display: contents;
+}
+
+.appearance-tab .bg-preview {
+  width: 100%;
+  height: 100px;
+  border-radius: 8px;
+  background: var(--bg-4);
+  border: 1px solid var(--border);
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.appearance-tab .bg-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.appearance-tab .action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 7px;
+  font-size: 12px;
+  background: var(--bg-3);
+  border: 1px dashed var(--border);
+  color: var(--text-3);
+  transition: background 0.12s, color 0.12s;
+}
+
+.appearance-tab .action-btn:hover {
+  background: var(--bg-4);
+  color: var(--text-2);
+}
+
+.appearance-tab .range {
+  width: 140px;
+  accent-color: var(--accent);
+}
+
+.appearance-tab .hint {
+  font-size: 11px;
+  color: var(--text-3);
+  line-height: 1.4;
+}
+
+.appearance-tab .color-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.appearance-tab .color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: background 0.1s;
+}
+
+.appearance-tab .color-row:hover {
+  background: var(--bg-3);
+}
+
+.appearance-tab .picker {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.appearance-tab .var-name {
+  font-size: 11px;
+  font-family: "JetBrains Mono", monospace;
+  color: var(--text-3);
+  width: 88px;
+  flex-shrink: 0;
+}
+
+.appearance-tab .var-label {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.appearance-tab .row-reset {
+  color: var(--text-3);
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+}
+
+.appearance-tab .row-reset:hover {
+  color: var(--text);
+  background: var(--bg-4);
+}
+
+.appearance-tab .reset-btn {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 7px;
+  font-size: 12px;
+  background: var(--bg-3);
+  border: 1px dashed var(--border);
+  color: var(--text-3);
+  transition: background 0.12s, color 0.12s;
+}
+
+.appearance-tab .reset-btn:hover {
+  background: var(--bg-4);
+  color: var(--text-2);
+}

@@ -83,6 +83,7 @@ pub fn create_chat(app: AppHandle, input: NewChatInput) -> Result<Chat, String> 
         updated_at: now,
         model: input.model,
         proxy_id: input.proxy_id,
+        summary: None,
         messages: Vec::new(),
     };
     let path = chat_path(&app, &chat.id)?;
@@ -141,9 +142,15 @@ pub fn fork_chat(app: AppHandle, id: String, until_message_id: String) -> Result
         .ok_or_else(|| format!("message {until_message_id} not found"))?;
     let now = Utc::now();
     let mut new_messages: Vec<Message> = Vec::new();
+    let summary_after_message_id = src.summary.as_ref().map(|s| s.after_message_id.clone());
+    let mut new_summary_after_message_id: Option<String> = None;
     for m in src.messages.iter().take(idx + 1) {
+        let new_id = Uuid::new_v4().to_string();
+        if summary_after_message_id.as_ref() == Some(&m.id) {
+            new_summary_after_message_id = Some(new_id.clone());
+        }
         new_messages.push(Message {
-            id: Uuid::new_v4().to_string(),
+            id: new_id,
             role: m.role.clone(),
             content: m.content.clone(),
             created_at: m.created_at,
@@ -155,6 +162,14 @@ pub fn fork_chat(app: AppHandle, id: String, until_message_id: String) -> Result
             attachments: m.attachments.clone(),
         });
     }
+    let summary = src.summary.and_then(|mut s| {
+        if let Some(after_message_id) = new_summary_after_message_id {
+            s.after_message_id = after_message_id;
+            Some(s)
+        } else {
+            None
+        }
+    });
     let _ = Role::System; // suppress unused if branches change
     let new_chat = Chat {
         id: Uuid::new_v4().to_string(),
@@ -164,6 +179,7 @@ pub fn fork_chat(app: AppHandle, id: String, until_message_id: String) -> Result
         updated_at: now,
         model: src.model,
         proxy_id: src.proxy_id,
+        summary,
         messages: new_messages,
     };
     json_store::write_atomic(&chat_path(&app, &new_chat.id)?, &new_chat)?;
