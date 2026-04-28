@@ -9,7 +9,7 @@ export interface Proxy {
   id: string;
   name: string;
   base_url: string;
-  key: string;
+  has_key: boolean;
   kind: ProxyKind;
   created_at: string;
 }

@@ -136,6 +136,7 @@
       params,
       tools,
       web_search: requestSettings.web_search,
+      prompt_caching: requestSettings.prompt_caching,
     };
 
     generating = true;
@@ -264,6 +265,7 @@
           params: buildParams(requestSettings),
           tools: [],
           web_search: false,
+          prompt_caching: requestSettings.prompt_caching,
         },
         streamId,
         (ev) => {
@@ -498,6 +500,7 @@
       params,
       tools,
       web_search: requestSettings.web_search,
+      prompt_caching: requestSettings.prompt_caching,
     };
 
     generating = true;
@@ -655,6 +658,7 @@
 <style>
   .chat-area {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     padding: 20px 0 36px;
     display: flex;
@@ -790,6 +794,7 @@
   }
 
   .error {
+    flex-shrink: 0;
     margin: 0 24px 8px;
     padding: 8px 12px;
     background: oklch(20% 0.05 25);

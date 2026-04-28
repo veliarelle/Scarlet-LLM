@@ -10,24 +10,13 @@
   import ChatView from "$lib/components/chat/ChatView.svelte";
   import SettingsDrawer from "$lib/components/settings/SettingsDrawer.svelte";
 
-  let viewportWidth = $state(0);
-  let viewportHeight = $state(0);
-
   function uiScale(): number {
     const raw = Number($settings.ui_scale ?? 1);
-    return Number.isFinite(raw) && raw > 0 ? raw : 1;
+    if (!Number.isFinite(raw)) return 1;
+    return Math.min(1.5, Math.max(0.75, raw));
   }
 
-  function updateViewport() {
-    if (typeof window === "undefined") return;
-    viewportWidth = window.innerWidth;
-    viewportHeight = window.innerHeight;
-  }
-
-  const scaledWidth = $derived(viewportWidth > 0 ? `${viewportWidth / uiScale()}px` : "100vw");
-  const scaledHeight = $derived(viewportHeight > 0 ? `${viewportHeight / uiScale()}px` : "100vh");
   const scaleValue = $derived(String(uiScale()));
-  const scaleTransform = $derived(`scale(${scaleValue})`);
 
   // Применяем тему + кастомные цвета + ui_scale + translucency
   $effect(() => {
@@ -86,9 +75,6 @@
   });
 
   onMount(() => {
-    updateViewport();
-    window.addEventListener("resize", updateViewport);
-
     void (async () => {
       // Применяем фон ДО загрузки настроек, чтобы изображение было видно
       // сразу после старта приложения (загружается из localStorage).
@@ -106,19 +92,13 @@
         }
       }
     })();
-
-    return () => {
-      window.removeEventListener("resize", updateViewport);
-    };
   });
 </script>
 
 <div class="viewport">
   <div
     class="app-scale"
-    style:width={scaledWidth}
-    style:height={scaledHeight}
-    style:transform={scaleTransform}
+    style={`--app-scale: ${scaleValue};`}
   >
     <div class="root">
       <Sidebar />
@@ -127,7 +107,12 @@
         <ChatView />
       </main>
     </div>
+  </div>
 
+  <div
+    class="overlay-scale"
+    style={`--app-scale: ${scaleValue};`}
+  >
     <SettingsDrawer />
   </div>
 </div>
@@ -143,9 +128,28 @@
     overflow: hidden;
   }
   .app-scale {
-    position: relative;
+    position: absolute;
+    inset: 0;
+    width: calc(100vw / var(--app-scale));
+    height: calc(100vh / var(--app-scale));
+    height: calc(100dvh / var(--app-scale));
     overflow: hidden;
+    transform: scale(var(--app-scale));
     transform-origin: top left;
+  }
+  .overlay-scale {
+    position: absolute;
+    inset: 0;
+    z-index: 500;
+    width: calc(100vw / var(--app-scale));
+    height: calc(100vh / var(--app-scale));
+    height: calc(100dvh / var(--app-scale));
+    pointer-events: none;
+    transform: scale(var(--app-scale));
+    transform-origin: top left;
+  }
+  .overlay-scale :global(.overlay) {
+    pointer-events: auto;
   }
   .root {
     display: flex;

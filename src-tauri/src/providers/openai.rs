@@ -70,7 +70,29 @@ struct StreamDelta {
     content: Option<String>,
 }
 
-fn build_body(req: &CompletionRequest, stream: bool) -> serde_json::Map<String, Value> {
+fn supports_openai_prompt_cache_controls(base_url: &str) -> bool {
+    base_url.contains("api.openai.com")
+}
+
+fn prompt_cache_key(model: &str) -> String {
+    let model = model
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.') {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>();
+    format!("scarlet-llm-{model}")
+}
+
+fn build_body(
+    req: &CompletionRequest,
+    stream: bool,
+    base_url: &str,
+) -> serde_json::Map<String, Value> {
     let messages: Vec<Value> = req
         .messages
         .iter()
@@ -89,14 +111,21 @@ fn build_body(req: &CompletionRequest, stream: bool) -> serde_json::Map<String, 
     body.insert("messages".into(), Value::Array(messages));
     if stream {
         body.insert("stream".into(), Value::Bool(true));
+        body.insert("stream_options".into(), json!({ "include_usage": true }));
+    }
+    if req.prompt_caching && supports_openai_prompt_cache_controls(base_url) {
         body.insert(
-            "stream_options".into(),
-            json!({ "include_usage": true }),
+            "prompt_cache_key".into(),
+            Value::String(prompt_cache_key(&req.model)),
         );
     }
     for (k, v) in &req.params {
         // Official OpenAI API (gpt-4.1, o1, o3, etc.) uses max_completion_tokens
-        let key = if k == "max_tokens" { "max_completion_tokens" } else { k.as_str() };
+        let key = if k == "max_tokens" {
+            "max_completion_tokens"
+        } else {
+            k.as_str()
+        };
         body.insert(key.to_string(), v.clone());
     }
 
@@ -149,7 +178,7 @@ impl Provider for OpenAiProvider {
         req: CompletionRequest,
     ) -> Result<CompletionResponse, String> {
         let url = join_url(base_url, "chat/completions");
-        let body = build_body(&req, false);
+        let body = build_body(&req, false, base_url);
         let client = reqwest::Client::new();
         let mut http = client.post(&url).json(&body);
         if !key.is_empty() {
@@ -195,7 +224,7 @@ impl Provider for OpenAiProvider {
         cancel: Arc<Notify>,
     ) -> Result<(), String> {
         let url = join_url(base_url, "chat/completions");
-        let body = build_body(&req, true);
+        let body = build_body(&req, true, base_url);
         let client = reqwest::Client::new();
         let mut http = client.post(&url).json(&body);
         if !key.is_empty() {

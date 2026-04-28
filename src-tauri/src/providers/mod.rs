@@ -16,6 +16,7 @@ pub struct CompletionRequest {
     pub params: serde_json::Map<String, serde_json::Value>,
     pub tools: Vec<serde_json::Value>,
     pub web_search: bool,
+    pub prompt_caching: bool,
 }
 
 pub enum StreamItem {

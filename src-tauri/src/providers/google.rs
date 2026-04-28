@@ -206,14 +206,18 @@ impl Provider for GoogleProvider {
         if !status.is_success() {
             return Err(format!("HTTP {status}: {text}"));
         }
-        let parsed: ModelsResp = serde_json::from_str(&text)
-            .map_err(|e| format!("parse models: {e}; body={text}"))?;
+        let parsed: ModelsResp =
+            serde_json::from_str(&text).map_err(|e| format!("parse models: {e}; body={text}"))?;
         Ok(parsed
             .models
             .into_iter()
             .filter(|m| m.supported_methods.contains(&"generateContent".to_string()))
             .map(|m| {
-                let id = m.name.strip_prefix("models/").unwrap_or(&m.name).to_string();
+                let id = m
+                    .name
+                    .strip_prefix("models/")
+                    .unwrap_or(&m.name)
+                    .to_string();
                 Model {
                     id,
                     name: m.display_name,
@@ -228,7 +232,11 @@ impl Provider for GoogleProvider {
         key: &str,
         req: CompletionRequest,
     ) -> Result<CompletionResponse, String> {
-        let url = format!("{}?key={}", model_endpoint(base_url, &req.model, "generateContent"), key);
+        let url = format!(
+            "{}?key={}",
+            model_endpoint(base_url, &req.model, "generateContent"),
+            key
+        );
         let body = build_body(&req);
         let resp = reqwest::Client::new()
             .post(&url)
@@ -241,8 +249,8 @@ impl Provider for GoogleProvider {
         if !status.is_success() {
             return Err(format!("HTTP {status}: {text}"));
         }
-        let parsed: GenerateResp = serde_json::from_str(&text)
-            .map_err(|e| format!("parse response: {e}; body={text}"))?;
+        let parsed: GenerateResp =
+            serde_json::from_str(&text).map_err(|e| format!("parse response: {e}; body={text}"))?;
         Ok(CompletionResponse {
             content: extract_text(&parsed),
             image_url: extract_image_url(&parsed),

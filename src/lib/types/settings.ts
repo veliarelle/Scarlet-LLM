@@ -66,6 +66,7 @@ export interface Settings {
   max_tokens: number;
   max_message_size: number;
   show_token_counts: boolean;
+  prompt_caching: boolean;
   params: ParamEntry[];
   reasoning: ReasoningConfig;
   prompts: Prompt[];
@@ -96,6 +97,7 @@ export const DEFAULT_SETTINGS: Settings = {
   max_tokens: 2048,
   max_message_size: 0,
   show_token_counts: false,
+  prompt_caching: false,
   params: [
     { id: "tp", key: "temperature", value: "0.7", enabled: true },
     { id: "pp", key: "top_p", value: "0.9", enabled: true },

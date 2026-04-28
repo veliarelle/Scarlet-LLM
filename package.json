@@ -1,6 +1,6 @@
 {
   "name": "scarlet-llm",
-  "version": "0.1.0",
+  "version": "1.0.1",
   "description": "Scarlet LLM - local cross-platform frontend for LLMs",
   "type": "module",
   "scripts": {
@@ -9,12 +9,13 @@
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "tauri:build:appimage": "VERSION=$npm_package_version NO_STRIP=1 tauri build --bundles appimage",
+    "tauri:bundle:appimage": "VERSION=$npm_package_version NO_STRIP=1 tauri bundle --bundles appimage"
   },
   "license": "MIT",
   "dependencies": {
     "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-opener": "^2",
     "lucide-svelte": "^1.0.1"
   },
   "devDependencies": {

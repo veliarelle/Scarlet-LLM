@@ -9,6 +9,29 @@ function escH(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+function escAttr(s: string): string {
+  return escH(s).replace(/'/g, "&#39;");
+}
+
+function sanitizeLang(s: string): string {
+  const lang = s.trim().split(/\s+/)[0] ?? "";
+  return /^[A-Za-z0-9_-]{1,40}$/.test(lang) ? lang : "text";
+}
+
+function safeHref(href: string): string | null {
+  const trimmed = href.trim();
+  if (!trimmed) return null;
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol === "http:" || url.protocol === "https:" || url.protocol === "mailto:") {
+      return url.href;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 function inlineMd(t: string): string {
   return t
     .replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>")
@@ -16,7 +39,11 @@ function inlineMd(t: string): string {
     .replace(/\*(.+?)\*/g, "<em>$1</em>")
     .replace(/_([^_]+)_/g, "<em>$1</em>")
     .replace(/`([^`]+)`/g, '<code class="sl-icode">$1</code>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, label: string, href: string) => {
+      const safe = safeHref(href);
+      if (!safe) return label;
+      return `<a href="${escAttr(safe)}" target="_blank" rel="noopener noreferrer nofollow">${label}</a>`;
+    });
 }
 
 const FENCE_RE = /^(\s*)```(.*)$/;
@@ -43,8 +70,9 @@ export function renderMarkdown(text: string): string {
   };
 
   const closeCode = () => {
+    const safeLang = sanitizeLang(lang);
     out.push(
-      `<pre class="sl-codeblock"><code class="lang-${lang}">${escH(codeLines.join("\n"))}</code></pre>`
+      `<pre class="sl-codeblock"><code class="lang-${safeLang}">${escH(codeLines.join("\n"))}</code></pre>`
     );
     codeLines = [];
     inCode = false;

@@ -20,6 +20,10 @@ pub fn proxies_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(config_root(app)?.join("proxies.json"))
 }
 
+pub fn proxy_secrets_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(config_root(app)?.join("proxy_secrets.json"))
+}
+
 #[allow(dead_code)]
 pub fn presets_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = config_root(app)?.join("presets");

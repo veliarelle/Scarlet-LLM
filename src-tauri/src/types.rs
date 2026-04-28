@@ -147,6 +147,37 @@ pub struct Proxy {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PublicProxy {
+    pub id: String,
+    pub name: String,
+    pub base_url: String,
+    #[serde(default)]
+    pub has_key: bool,
+    #[serde(default)]
+    pub kind: ProxyKind,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProxySecret {
+    pub proxy_id: String,
+    pub key: String,
+}
+
+impl From<Proxy> for PublicProxy {
+    fn from(proxy: Proxy) -> Self {
+        Self {
+            id: proxy.id,
+            name: proxy.name,
+            base_url: proxy.base_url,
+            has_key: !proxy.key.is_empty(),
+            kind: proxy.kind,
+            created_at: proxy.created_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParamEntry {
     pub id: String,
     pub key: String,
@@ -259,6 +290,8 @@ pub struct Settings {
     pub max_message_size: u32,
     #[serde(default)]
     pub show_token_counts: bool,
+    #[serde(default)]
+    pub prompt_caching: bool,
 
     #[serde(default = "default_params")]
     pub params: Vec<ParamEntry>,
@@ -315,6 +348,7 @@ impl Default for Settings {
             max_tokens: default_max_tokens(),
             max_message_size: default_max_message_size(),
             show_token_counts: false,
+            prompt_caching: false,
             params: default_params(),
             reasoning: ReasoningConfig::default(),
             prompts: Vec::new(),

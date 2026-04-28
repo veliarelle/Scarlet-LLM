@@ -37,6 +37,9 @@
   async function setShowTokenCounts(v: boolean) {
     await settings.patch({ show_token_counts: v });
   }
+  async function setPromptCaching(v: boolean) {
+    await settings.patch({ prompt_caching: v });
+  }
   async function exportProfile() {
     await api.exportProfile();
   }
@@ -128,6 +131,9 @@
   </Row>
   <Row label={$tr("general.showTokenCounts")} hint={$tr("general.showTokenCountsHint")}>
     <Toggle value={$settings.show_token_counts} onChange={setShowTokenCounts} />
+  </Row>
+  <Row label={$tr("general.promptCaching")} hint={$tr("general.promptCachingHint")}>
+    <Toggle value={$settings.prompt_caching} onChange={setPromptCaching} />
   </Row>
 </Section>
 
