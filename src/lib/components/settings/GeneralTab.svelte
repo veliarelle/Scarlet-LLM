@@ -1,5 +1,8 @@
 <script lang="ts">
+  import { Download, Upload } from "lucide-svelte";
+  import { api } from "$lib/api/invoke";
   import { settings } from "$lib/stores/settings";
+  import { refreshPresets } from "$lib/stores/presets";
   import { LANGUAGE_OPTIONS, tr } from "$lib/i18n";
   import type { Language } from "$lib/types/settings";
   import Section from "./Section.svelte";
@@ -24,10 +27,38 @@
     const v = Number((e.target as HTMLInputElement).value);
     if (!isNaN(v)) await settings.patch({ max_tokens: v });
   }
+  async function setMaxMessageSize(e: Event) {
+    const v = Number((e.target as HTMLInputElement).value);
+    if (!isNaN(v)) await settings.patch({ max_message_size: v });
+  }
   async function setStreaming(v: boolean) {
     await settings.patch({ streaming: v });
   }
+  async function setShowTokenCounts(v: boolean) {
+    await settings.patch({ show_token_counts: v });
+  }
+  async function exportProfile() {
+    await api.exportProfile();
+  }
+  async function importProfile() {
+    if (!confirm($tr("general.importProfileConfirm"))) return;
+    const count = await api.importProfile();
+    if (count > 0) await refreshPresets();
+    await settings.load();
+  }
 </script>
+
+<Section title={$tr("general.profile")}>
+  <p class="hint">{$tr("general.profileHint")}</p>
+  <div class="profile-actions">
+    <button class="action-btn" onclick={exportProfile}>
+      <Download size={14} /> {$tr("general.exportProfile")}
+    </button>
+    <button class="action-btn" onclick={importProfile}>
+      <Upload size={14} /> {$tr("general.importProfile")}
+    </button>
+  </div>
+</Section>
 
 <Section title={$tr("general.interface")}>
   <Row label={$tr("general.language")} hint={$tr("general.languageHint")}>
@@ -81,8 +112,22 @@
       onchange={setMaxTokens}
     />
   </Row>
+  <Row label={$tr("general.maxMessageSize")} hint={$tr("general.characters")}>
+    <input
+      type="number"
+      class="num-input"
+      min="0"
+      max="1000000"
+      step="1000"
+      value={$settings.max_message_size}
+      onchange={setMaxMessageSize}
+    />
+  </Row>
   <Row label={$tr("general.streaming")}>
     <Toggle value={$settings.streaming} onChange={setStreaming} />
+  </Row>
+  <Row label={$tr("general.showTokenCounts")} hint={$tr("general.showTokenCountsHint")}>
+    <Toggle value={$settings.show_token_counts} onChange={setShowTokenCounts} />
   </Row>
 </Section>
 
@@ -109,5 +154,31 @@
   }
   .num-input:focus {
     border-color: var(--accent-d);
+  }
+  .hint {
+    font-size: 11px;
+    color: var(--text-3);
+    line-height: 1.4;
+  }
+  .profile-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .action-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 7px;
+    font-size: 12px;
+    background: var(--bg-3);
+    border: 1px dashed var(--border);
+    color: var(--text-3);
+    transition: background 0.12s, color 0.12s;
+  }
+  .action-btn:hover {
+    background: var(--bg-4);
+    color: var(--text-2);
   }
 </style>

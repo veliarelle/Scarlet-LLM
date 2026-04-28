@@ -2,7 +2,8 @@ export type ProxyKind =
   | "openai_compat"
   | "anthropic_native"
   | "google_native"
-  | "openai_responses";
+  | "openai_responses"
+  | "openrouter";
 
 export interface Proxy {
   id: string;
@@ -25,4 +26,5 @@ export const PROXY_KIND_LABELS: Record<ProxyKind, string> = {
   anthropic_native: "Anthropic native",
   google_native: "Google native",
   openai_responses: "OpenAI Responses API",
+  openrouter: "OpenRouter",
 };

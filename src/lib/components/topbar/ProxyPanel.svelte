@@ -17,6 +17,7 @@
     anthropic_native: "https://api.anthropic.com",
     google_native: "https://generativelanguage.googleapis.com",
     openai_responses: "https://api.openai.com/v1",
+    openrouter: "https://openrouter.ai/api/v1",
   };
 
   let expandedId = $state<string | null>(null);

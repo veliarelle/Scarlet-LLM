@@ -17,6 +17,7 @@
   import { settings } from "$lib/stores/settings";
   import Markdown from "$lib/components/common/Markdown.svelte";
   import { api } from "$lib/api/invoke";
+  import { estimateStoredMessageTokens } from "$lib/utils/buildRequest";
 
   let {
     msg,
@@ -76,6 +77,7 @@
   const displayTime = $derived(currentMeta?.created_at ?? msg.created_at);
   // image_url per variation (falls back to message-level for old chats)
   const displayImageUrl = $derived(currentMeta?.image_url ?? msg.image_url ?? null);
+  const tokenCount = $derived(estimateStoredMessageTokens(msg));
 
   function fmtTime(iso: string): string {
     try {
@@ -164,6 +166,9 @@
       <span class="role">{isUser ? $settings.user_name || $tr("message.userFallback") : $settings.assistant_name || "Scarlet"}</span>
       {#if isAssistant && displayModel}
         <span class="model-tag" title={displayModel}>{displayModel}</span>
+      {/if}
+      {#if isAssistant && $settings.show_token_counts && !isEmptyAssistant}
+        <span class="token-tag" title={`${tokenCount} tokens`}>{tokenCount} tok</span>
       {/if}
       <span class="time">{fmtTime(displayTime)}</span>
     </div>
@@ -349,6 +354,15 @@
     max-width: 240px;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .token-tag {
+    font-size: 11px;
+    color: var(--text-3);
+    font-family: "JetBrains Mono", monospace;
+    padding: 2px 7px;
+    background: color-mix(in srgb, var(--bg-4) 72%, transparent);
+    border-radius: 5px;
     white-space: nowrap;
   }
   .message.user .model-tag {

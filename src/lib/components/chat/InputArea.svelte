@@ -3,6 +3,7 @@
   import { tr } from "$lib/i18n";
   import { settingsOpen } from "$lib/stores/ui";
   import type { Attachment } from "$lib/types/chat";
+  import { clickOutside } from "$lib/utils/clickOutside";
   import { uid } from "$lib/utils/id";
 
   let {
@@ -12,13 +13,21 @@
     busy = false,
     canStop = false,
     canResend = false,
+    contextUsed = 0,
+    contextWindow = 0,
+    onSummarize,
+    canSummarize = false,
   }: {
     onSend: (text: string, attachments: Attachment[]) => void | Promise<void>;
     onStop?: () => void;
+    onSummarize?: () => void | Promise<void>;
     disabled?: boolean;
     busy?: boolean;
     canStop?: boolean;
     canResend?: boolean;
+    contextUsed?: number;
+    contextWindow?: number;
+    canSummarize?: boolean;
   } = $props();
 
   let text = $state("");
@@ -26,6 +35,7 @@
   let submitting = $state(false);
   let textareaEl: HTMLTextAreaElement | undefined = $state();
   let fileInputEl: HTMLInputElement | undefined = $state();
+  let showContextNumber = $state(false);
 
   $effect(() => {
     void text;
@@ -36,6 +46,16 @@
 
   const canSend = $derived(
     !disabled && !busy && !submitting && (text.trim().length > 0 || canResend || attachments.length > 0)
+  );
+  const contextLimit = $derived(Math.max(0, Math.floor(Number(contextWindow) || 0)));
+  const contextValue = $derived(Math.max(0, Math.floor(Number(contextUsed) || 0)));
+  const contextRatio = $derived(contextLimit > 0 ? Math.min(1, contextValue / contextLimit) : 0);
+  const contextPercent = $derived(Math.round(contextRatio * 100));
+  const contextTitle = $derived(
+    $tr("input.contextUsage", {
+      used: contextValue.toLocaleString(),
+      limit: contextLimit > 0 ? contextLimit.toLocaleString() : "∞",
+    })
   );
 
   async function submit() {
@@ -132,6 +152,41 @@
         class="textarea"
       ></textarea>
       <div class="input-right">
+        <div class="context-wrap" use:clickOutside={() => (showContextNumber = false)}>
+          <button
+            class="context-meter"
+            class:warn={contextRatio >= 0.8}
+            class:full={contextRatio >= 0.98}
+            style={`--context-fill: ${contextPercent}%;`}
+            title={contextTitle}
+            onclick={() => (showContextNumber = !showContextNumber)}
+            aria-label={contextTitle}
+          >
+            {#if showContextNumber}
+              <span class="context-number">{contextLimit > 0 ? `${contextPercent}%` : "∞"}</span>
+            {:else}
+              <span class="context-dot"></span>
+            {/if}
+          </button>
+          {#if showContextNumber}
+            <div class="context-popover">
+              <div class="context-exact">
+                <span>{contextValue.toLocaleString()} / {contextLimit > 0 ? contextLimit.toLocaleString() : "∞"}</span>
+                <span class="context-percent">{contextLimit > 0 ? `${contextPercent}%` : "∞"}</span>
+              </div>
+              <button
+                class="context-action"
+                onclick={() => {
+                  showContextNumber = false;
+                  onSummarize?.();
+                }}
+                disabled={!canSummarize}
+              >
+                {$tr("input.summarize")}
+              </button>
+            </div>
+          {/if}
+        </div>
         <button
           class="icon-btn"
           title={$tr("settings.title")}
@@ -288,6 +343,96 @@
     display: flex;
     align-items: center;
     gap: 4px;
+  }
+  .context-wrap {
+    position: relative;
+    flex-shrink: 0;
+  }
+  .context-meter {
+    --meter-color: var(--accent);
+    --context-fill: 0%;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background:
+      radial-gradient(circle at center, var(--bg-3) 56%, transparent 57%),
+      conic-gradient(var(--meter-color) var(--context-fill), var(--bg-4) 0);
+    color: var(--text-2);
+    border: 1px solid var(--border);
+    transition: border-color 0.12s, color 0.12s, background 0.12s;
+  }
+  .context-meter:hover {
+    border-color: var(--accent-d);
+    color: var(--text);
+  }
+  .context-meter.warn {
+    --meter-color: oklch(72% 0.16 70);
+  }
+  .context-meter.full {
+    --meter-color: var(--danger);
+  }
+  .context-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--meter-color);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--meter-color) 16%, transparent);
+  }
+  .context-number {
+    font-size: 9px;
+    font-family: "JetBrains Mono", monospace;
+    font-weight: 600;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .context-popover {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 8px);
+    min-width: 150px;
+    padding: 8px;
+    border-radius: 9px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    color: var(--text-2);
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    z-index: 5;
+  }
+  .context-exact {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 11px;
+    font-family: "JetBrains Mono", monospace;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .context-percent {
+    color: var(--text-3);
+  }
+  .context-action {
+    width: 100%;
+    padding: 6px 8px;
+    border-radius: 7px;
+    background: var(--bg-4);
+    color: var(--text-2);
+    font-size: 12px;
+  }
+  .context-action:hover:not(:disabled) {
+    color: var(--text);
+    background: color-mix(in srgb, var(--accent) 18%, var(--bg-4));
+  }
+  .context-action:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
   .send-btn {
     display: flex;

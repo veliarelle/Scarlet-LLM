@@ -46,7 +46,18 @@ export interface Chat {
   updated_at: string;
   model?: string | null;
   proxy_id?: string | null;
+  summary?: ChatSummary | null;
   messages: Message[];
+}
+
+export interface ChatSummary {
+  id: string;
+  content: string;
+  prompt: string;
+  after_message_id: string;
+  model?: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ChatMeta {

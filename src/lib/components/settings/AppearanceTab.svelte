@@ -17,6 +17,7 @@
   import Row from "./Row.svelte";
   import Segmented from "./Segmented.svelte";
   import Toggle from "./Toggle.svelte";
+  import "./AppearanceTab.css";
 
   let fileInput: HTMLInputElement | undefined = $state();
   let bg = $state<BgState>({ hasBg: false, dataUrl: "", blur: 0, dim: 0.4 });
@@ -147,244 +148,136 @@
   });
 </script>
 
-<Section title={$tr("appearance.theme")}>
-  <Row label={$tr("appearance.colorScheme")}>
-    <Segmented
-      value={$settings.theme}
-      onChange={setTheme}
-      options={[
-        { value: "dark", label: "🌙 Dark" },
-        { value: "light", label: "☀️ Light" },
-        { value: "custom", label: "🎨 Custom" },
-      ]}
-    />
-  </Row>
-  <Row label={$tr("appearance.uiScale")} hint="{$settings.ui_scale.toFixed(2)}x">
-    <input
-      type="range"
-      class="range"
-      min="0.75"
-      max="1.5"
-      step="0.05"
-      value={$settings.ui_scale}
-      oninput={setUiScale}
-    />
-  </Row>
-</Section>
-
-{#if $settings.theme === "custom"}
-  <Section title={$tr("appearance.customColors")}>
-    <p class="hint">
-      {$tr("appearance.customHint")}
-    </p>
-    <div class="color-grid">
-      {#each COLOR_VARS as v (v)}
-        <div class="color-row">
-          <input
-            type="color"
-            class="picker"
-            value={colorValue(v)}
-            oninput={(e) => setColor(v, e)}
-            aria-label={VAR_LABELS[v]}
-          />
-          <span class="var-name">--{v}</span>
-          <span class="var-label">{VAR_LABELS[v]}</span>
-          {#if $settings.custom_colors[v]}
-            <button class="row-reset" onclick={() => resetColor(v)} aria-label={$tr("common.reset")}>
-              <RotateCcw size={12} />
-            </button>
-          {/if}
-        </div>
-      {/each}
-    </div>
-    <button class="reset-btn" onclick={resetAllColors}>
-      <RotateCcw size={14} /> {$tr("appearance.resetAllColors")}
-    </button>
+<div class="appearance-tab">
+  <Section title={$tr("appearance.theme")}>
+    <Row label={$tr("appearance.colorScheme")}>
+      <Segmented
+        value={$settings.theme}
+        onChange={setTheme}
+        options={[
+          { value: "dark", label: "🌙 Dark" },
+          { value: "light", label: "☀️ Light" },
+          { value: "custom", label: "🎨 Custom" },
+        ]}
+      />
+    </Row>
+    <Row label={$tr("appearance.uiScale")} hint="{$settings.ui_scale.toFixed(2)}x">
+      <input
+        type="range"
+        class="range"
+        min="0.75"
+        max="1.5"
+        step="0.05"
+        value={$settings.ui_scale}
+        oninput={setUiScale}
+      />
+    </Row>
   </Section>
-{/if}
 
-<Section title={$tr("appearance.background")}>
-  <div class="bg-preview" style:background-image={bg.hasBg ? `url(${bg.dataUrl})` : "none"}>
-    {#if !bg.hasBg}
-      <ImageIcon size={28} color="var(--text-3)" />
-    {/if}
-  </div>
-
-  <div class="bg-actions">
-    <button class="action-btn" onclick={() => fileInput?.click()}>
-      <ImageIcon size={14} />
-      {bg.hasBg ? $tr("appearance.change") : $tr("appearance.upload")}
-    </button>
-    {#if bg.hasBg}
-      <button class="action-btn" onclick={removeBg}>
-        <Trash2 size={14} /> {$tr("appearance.deleteBg")}
+  {#if $settings.theme === "custom"}
+    <Section title={$tr("appearance.customColors")}>
+      <p class="hint">
+        {$tr("appearance.customHint")}
+      </p>
+      <div class="color-grid">
+        {#each COLOR_VARS as v (v)}
+          <div class="color-row">
+            <input
+              type="color"
+              class="picker"
+              value={colorValue(v)}
+              oninput={(e) => setColor(v, e)}
+              aria-label={VAR_LABELS[v]}
+            />
+            <span class="var-name">--{v}</span>
+            <span class="var-label">{VAR_LABELS[v]}</span>
+            {#if $settings.custom_colors[v]}
+              <button class="row-reset" onclick={() => resetColor(v)} aria-label={$tr("common.reset")}>
+                <RotateCcw size={12} />
+              </button>
+            {/if}
+          </div>
+        {/each}
+      </div>
+      <button class="reset-btn" onclick={resetAllColors}>
+        <RotateCcw size={14} /> {$tr("appearance.resetAllColors")}
       </button>
+    </Section>
+  {/if}
+
+  <Section title={$tr("appearance.background")}>
+    <div class="bg-preview" style:background-image={bg.hasBg ? `url(${bg.dataUrl})` : "none"}>
+      {#if !bg.hasBg}
+        <ImageIcon size={28} color="var(--text-3)" />
+      {/if}
+    </div>
+
+    <div class="bg-actions">
+      <button class="action-btn" onclick={() => fileInput?.click()}>
+        <ImageIcon size={14} />
+        {bg.hasBg ? $tr("appearance.change") : $tr("appearance.upload")}
+      </button>
+      {#if bg.hasBg}
+        <button class="action-btn" onclick={removeBg}>
+          <Trash2 size={14} /> {$tr("appearance.deleteBg")}
+        </button>
+      {/if}
+      <input type="file" accept="image/*" bind:this={fileInput} onchange={uploadBg} hidden />
+    </div>
+
+    {#if bg.hasBg}
+      <Row label="Blur" hint="{bg.blur}px">
+        <input type="range" class="range" min="0" max="40" step="1" value={bg.blur} oninput={setBlur} />
+      </Row>
+      <Row label="Dim" hint="{Math.round(bg.dim * 100)}%">
+        <input type="range" class="range" min="0" max="0.95" step="0.05" value={bg.dim} oninput={setDim} />
+      </Row>
     {/if}
-    <input type="file" accept="image/*" bind:this={fileInput} onchange={uploadBg} hidden />
-  </div>
+  </Section>
 
-  {#if bg.hasBg}
-    <Row label="Blur" hint="{bg.blur}px">
-      <input type="range" class="range" min="0" max="40" step="1" value={bg.blur} oninput={setBlur} />
-    </Row>
-    <Row label="Dim" hint="{Math.round(bg.dim * 100)}%">
-      <input type="range" class="range" min="0" max="0.95" step="0.05" value={bg.dim} oninput={setDim} />
-    </Row>
-  {/if}
-</Section>
-
-<Section title={$tr("appearance.translucency")}>
-  <p class="hint">
-    {$tr("appearance.translucencyHint")}
-  </p>
-  <Row label={$tr("appearance.sidebar")}>
-    <Toggle
-      value={$settings.translucent_sidebar}
-      onChange={setSidebarTranslucent}
-      label={$tr("appearance.translucentSidebar")}
-    />
-  </Row>
-  {#if $settings.translucent_sidebar}
-    <Row label={$tr("appearance.blurStrength")} hint="{$settings.sidebar_blur}px">
-      <input
-        type="range"
-        class="range"
-        min="0"
-        max="40"
-        step="1"
-        value={$settings.sidebar_blur}
-        oninput={setSidebarBlur}
+  <Section title={$tr("appearance.translucency")}>
+    <p class="hint">
+      {$tr("appearance.translucencyHint")}
+    </p>
+    <Row label={$tr("appearance.sidebar")}>
+      <Toggle
+        value={$settings.translucent_sidebar}
+        onChange={setSidebarTranslucent}
+        label={$tr("appearance.translucentSidebar")}
       />
     </Row>
-  {/if}
-  <Row label={$tr("appearance.topbar")}>
-    <Toggle
-      value={$settings.translucent_topbar}
-      onChange={setTopbarTranslucent}
-      label={$tr("appearance.translucentTopbar")}
-    />
-  </Row>
-  {#if $settings.translucent_topbar}
-    <Row label={$tr("appearance.blurStrength")} hint="{$settings.topbar_blur}px">
-      <input
-        type="range"
-        class="range"
-        min="0"
-        max="40"
-        step="1"
-        value={$settings.topbar_blur}
-        oninput={setTopbarBlur}
+    {#if $settings.translucent_sidebar}
+      <Row label={$tr("appearance.blurStrength")} hint="{$settings.sidebar_blur}px">
+        <input
+          type="range"
+          class="range"
+          min="0"
+          max="40"
+          step="1"
+          value={$settings.sidebar_blur}
+          oninput={setSidebarBlur}
+        />
+      </Row>
+    {/if}
+    <Row label={$tr("appearance.topbar")}>
+      <Toggle
+        value={$settings.translucent_topbar}
+        onChange={setTopbarTranslucent}
+        label={$tr("appearance.translucentTopbar")}
       />
     </Row>
-  {/if}
-</Section>
-
-<style>
-  .bg-preview {
-    width: 100%;
-    height: 100px;
-    border-radius: 8px;
-    background: var(--bg-4);
-    border: 1px solid var(--border);
-    background-size: cover;
-    background-position: center;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .bg-actions {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-  .action-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    border-radius: 7px;
-    font-size: 12px;
-    background: var(--bg-3);
-    border: 1px dashed var(--border);
-    color: var(--text-3);
-    transition: background 0.12s, color 0.12s;
-  }
-  .action-btn:hover {
-    background: var(--bg-4);
-    color: var(--text-2);
-  }
-  .range {
-    width: 140px;
-    accent-color: var(--accent);
-  }
-
-  .hint {
-    font-size: 11px;
-    color: var(--text-3);
-    line-height: 1.4;
-  }
-  .color-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-  .color-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 4px 6px;
-    border-radius: 6px;
-    transition: background 0.1s;
-  }
-  .color-row:hover {
-    background: var(--bg-3);
-  }
-  .picker {
-    width: 28px;
-    height: 28px;
-    border: 1px solid var(--border);
-    border-radius: 5px;
-    padding: 0;
-    background: none;
-    cursor: pointer;
-  }
-  .var-name {
-    font-size: 11px;
-    font-family: "JetBrains Mono", monospace;
-    color: var(--text-3);
-    width: 88px;
-    flex-shrink: 0;
-  }
-  .var-label {
-    flex: 1;
-    font-size: 12px;
-    color: var(--text-2);
-  }
-  .row-reset {
-    color: var(--text-3);
-    padding: 4px;
-    border-radius: 4px;
-    display: flex;
-  }
-  .row-reset:hover {
-    color: var(--text);
-    background: var(--bg-4);
-  }
-  .reset-btn {
-    align-self: flex-start;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    border-radius: 7px;
-    font-size: 12px;
-    background: var(--bg-3);
-    border: 1px dashed var(--border);
-    color: var(--text-3);
-    transition: background 0.12s, color 0.12s;
-  }
-  .reset-btn:hover {
-    background: var(--bg-4);
-    color: var(--text-2);
-  }
-</style>
+    {#if $settings.translucent_topbar}
+      <Row label={$tr("appearance.blurStrength")} hint="{$settings.topbar_blur}px">
+        <input
+          type="range"
+          class="range"
+          min="0"
+          max="40"
+          step="1"
+          value={$settings.topbar_blur}
+          oninput={setTopbarBlur}
+        />
+      </Row>
+    {/if}
+  </Section>
+</div>

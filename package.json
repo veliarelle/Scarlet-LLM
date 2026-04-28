@@ -4,7 +4,7 @@
   "description": "Scarlet LLM - local cross-platform frontend for LLMs",
   "type": "module",
   "scripts": {
-    "dev": "vite dev",
+    "dev": "vite dev --force",
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",

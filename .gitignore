@@ -3,6 +3,8 @@
 Thumbs.db
 *.swp
 *.swo
+.vscode/
+.idea/
 
 # Dependencies
 node_modules/
@@ -50,6 +52,13 @@ src-tauri/gen/android/key.properties
 *.aab
 *.apks
 *.idsig
+*.AppImage
+*.deb
+*.rpm
+*.msi
+*.exe
+*.dmg
+*.pkg
 
 # Logs
 *.log

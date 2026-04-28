@@ -1,7 +1,7 @@
 import { get, writable } from "svelte/store";
 import { api } from "$lib/api/invoke";
 import { tr } from "$lib/i18n";
-import type { Attachment, Chat, ChatMeta, Message, Role, VariationMeta } from "$lib/types/chat";
+import type { Attachment, Chat, ChatMeta, ChatSummary, Message, Role, VariationMeta } from "$lib/types/chat";
 import { uid } from "$lib/utils/id";
 import { settings } from "./settings";
 import { incognito } from "./ui";
@@ -74,6 +74,7 @@ export async function ensureChat(initialUserContent: string): Promise<Chat> {
       updated_at: nowIso(),
       model: s.active_model ?? null,
       proxy_id: s.active_proxy_id ?? null,
+      summary: null,
       messages: [],
     };
     activeChat.set(c);
@@ -245,7 +246,9 @@ export function setMessageImageUrl(messageId: string, imageUrl: string) {
 export function deleteMessage(messageId: string) {
   activeChat.update((c) => {
     if (!c) return c;
-    return { ...c, messages: c.messages.filter((m) => m.id !== messageId), updated_at: nowIso() };
+    const messages = c.messages.filter((m) => m.id !== messageId);
+    const summary = c.summary?.after_message_id === messageId ? null : c.summary;
+    return { ...c, messages, summary, updated_at: nowIso() };
   });
 }
 
@@ -254,7 +257,11 @@ export function rewindToMessage(messageId: string) {
     if (!c) return c;
     const idx = c.messages.findIndex((m) => m.id === messageId);
     if (idx === -1) return c;
-    return { ...c, messages: c.messages.slice(0, idx + 1), updated_at: nowIso() };
+    const messages = c.messages.slice(0, idx + 1);
+    const summary = c.summary && messages.some((m) => m.id === c.summary?.after_message_id)
+      ? c.summary
+      : null;
+    return { ...c, messages, summary, updated_at: nowIso() };
   });
 }
 
@@ -269,6 +276,25 @@ export async function persistActive() {
   const c = get(activeChat);
   if (!c) return;
   await persist(c);
+}
+
+export function setSummary(summary: ChatSummary) {
+  activeChat.update((c) => (c ? { ...c, summary, updated_at: nowIso() } : c));
+}
+
+export function updateSummaryContent(content: string) {
+  activeChat.update((c) => {
+    if (!c?.summary) return c;
+    return {
+      ...c,
+      summary: { ...c.summary, content, updated_at: nowIso() },
+      updated_at: nowIso(),
+    };
+  });
+}
+
+export function deleteSummary() {
+  activeChat.update((c) => (c ? { ...c, summary: null, updated_at: nowIso() } : c));
 }
 
 export async function renameActive(title: string) {

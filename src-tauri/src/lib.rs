@@ -76,6 +76,10 @@ pub fn run() {
             commands::presets::save_preset,
             commands::presets::create_preset,
             commands::presets::delete_preset,
+            commands::import_export::export_preset,
+            commands::import_export::import_preset,
+            commands::import_export::export_profile,
+            commands::import_export::import_profile,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

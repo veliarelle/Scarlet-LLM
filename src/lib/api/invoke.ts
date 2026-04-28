@@ -1,6 +1,6 @@
 import { invoke, Channel } from "@tauri-apps/api/core";
 import type { Proxy, ProxyInput } from "$lib/types/proxy";
-import type { Prompt, Settings } from "$lib/types/settings";
+import type { PresetUtilities, Prompt, Settings } from "$lib/types/settings";
 import type { Preset, PresetMeta } from "$lib/types/preset";
 import type {
   Chat,
@@ -62,7 +62,12 @@ export const api = {
   listPresets: () => invoke<PresetMeta[]>("list_presets"),
   loadPreset: (id: string) => invoke<Preset>("load_preset", { id }),
   savePreset: (preset: Preset) => invoke<Preset>("save_preset", { preset }),
-  createPreset: (name: string, prompts: Prompt[]) =>
-    invoke<Preset>("create_preset", { name, prompts }),
+  createPreset: (name: string, prompts: Prompt[], utilities?: PresetUtilities) =>
+    invoke<Preset>("create_preset", { name, prompts, utilities }),
   deletePreset: (id: string) => invoke<void>("delete_preset", { id }),
+
+  exportPreset: (presetId: string) => invoke<boolean>("export_preset", { presetId }),
+  importPreset: () => invoke<Preset | null>("import_preset"),
+  exportProfile: () => invoke<boolean>("export_profile"),
+  importProfile: () => invoke<number>("import_profile"),
 };

@@ -1,6 +1,7 @@
 pub mod anthropic;
 pub mod google;
 pub mod openai;
+pub mod openrouter;
 pub mod responses;
 
 use crate::types::{ChatMessage, CompletionResponse, Model, ProxyKind, TokenUsage};
@@ -47,6 +48,7 @@ pub fn provider_for(kind: &ProxyKind) -> Box<dyn Provider> {
     match kind {
         ProxyKind::OpenaiCompat => Box::new(openai::OpenAiProvider),
         ProxyKind::OpenaiResponses => Box::new(responses::ResponsesProvider),
+        ProxyKind::OpenRouter => Box::new(openrouter::OpenRouterProvider),
         ProxyKind::AnthropicNative => Box::new(anthropic::AnthropicProvider),
         ProxyKind::GoogleNative => Box::new(google::GoogleProvider),
     }
