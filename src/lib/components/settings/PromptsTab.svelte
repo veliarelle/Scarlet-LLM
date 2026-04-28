@@ -34,6 +34,8 @@
   let presetOpen = $state(false);
   let showPresetInput = $state(false);
   let newPresetName = $state("");
+  let presetSaved = $state(false);
+  let presetSavedTimer: ReturnType<typeof setTimeout> | null = null;
   let dragId = $state<string | null>(null);
   let dragOverId = $state<string | null>(null);
   // Флаг: разрешаем DnD только если он начался с drag-handle
@@ -148,6 +150,12 @@
   async function saveToExisting(id: string) {
     if (!confirm($tr("prompts.overwriteConfirm"))) return;
     await overwritePreset(id, $settings.prompts, $settings.utilities);
+    presetSaved = true;
+    if (presetSavedTimer) clearTimeout(presetSavedTimer);
+    presetSavedTimer = setTimeout(() => {
+      presetSaved = false;
+      presetSavedTimer = null;
+    }, 2000);
   }
 
   async function restoreSummarizePrompt() {
@@ -257,6 +265,7 @@
 
     <button
       class="save-active-btn"
+      class:saved={presetSaved}
       title={$settings.active_preset_id
         ? $tr("prompts.saveToActiveTitle")
         : $tr("prompts.noActivePreset")}
@@ -440,6 +449,11 @@
   .save-active-btn:hover:not(:disabled) {
     background: var(--bg-4);
     color: var(--text);
+  }
+  .save-active-btn.saved:not(:disabled) {
+    background: color-mix(in srgb, #22c55e 78%, var(--bg-3));
+    border-color: color-mix(in srgb, #22c55e 72%, var(--border));
+    color: white;
   }
   .save-active-btn:disabled {
     opacity: 0.4;

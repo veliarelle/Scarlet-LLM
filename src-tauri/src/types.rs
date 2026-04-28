@@ -7,6 +7,7 @@ pub enum Role {
     System,
     User,
     Assistant,
+    Tool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -15,6 +16,19 @@ pub struct ChatMessage {
     /// Either a plain string or an OpenAI-style array of content parts
     /// (text / image_url / file). Providers convert to their own format.
     pub content: serde_json::Value,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub tool_call_id: Option<String>,
+    #[serde(default)]
+    pub tool_calls: Vec<ToolCall>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolCall {
+    pub id: String,
+    pub name: String,
+    pub arguments: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -116,6 +130,8 @@ pub struct CompletionResponse {
     pub usage: Option<TokenUsage>,
     #[serde(default)]
     pub image_url: Option<String>,
+    #[serde(default)]
+    pub tool_calls: Vec<ToolCall>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -262,6 +278,42 @@ pub struct PresetMeta {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentDefinition {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub prompt: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub proxy_id: Option<String>,
+    #[serde(default)]
+    pub tool_names: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AgentPreset {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub agents: Vec<AgentDefinition>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentPresetMeta {
+    pub id: String,
+    pub name: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     #[serde(default = "default_language")]
     pub language: String,
@@ -270,6 +322,8 @@ pub struct Settings {
     pub active_proxy_id: Option<String>,
     #[serde(default)]
     pub active_preset_id: Option<String>,
+    #[serde(default)]
+    pub active_agent_preset_id: Option<String>,
     #[serde(default)]
     pub active_model: Option<String>,
     #[serde(default)]
@@ -309,6 +363,8 @@ pub struct Settings {
     #[serde(default)]
     pub agents: bool,
     #[serde(default)]
+    pub agent_definitions: Vec<AgentDefinition>,
+    #[serde(default)]
     pub tools: bool,
 
     #[serde(default = "default_theme")]
@@ -339,6 +395,7 @@ impl Default for Settings {
             language: default_language(),
             active_proxy_id: None,
             active_preset_id: None,
+            active_agent_preset_id: None,
             active_model: None,
             active_chat_id: None,
             user_name: default_user_name(),
@@ -355,6 +412,7 @@ impl Default for Settings {
             utilities: PromptUtilities::default(),
             web_search: false,
             agents: false,
+            agent_definitions: Vec::new(),
             tools: false,
             theme: default_theme(),
             custom_colors: std::collections::BTreeMap::new(),

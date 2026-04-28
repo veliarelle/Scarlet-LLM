@@ -1,5 +1,5 @@
 use crate::providers::{CompletionRequest, Provider, StreamCallback, StreamItem};
-use crate::types::{CompletionResponse, Model, Role, TokenUsage};
+use crate::types::{CompletionResponse, Model, Role, TokenUsage, ToolCall};
 use async_trait::async_trait;
 use eventsource_stream::Eventsource;
 use futures_util::StreamExt;
@@ -51,6 +51,15 @@ struct Part {
     text: Option<String>,
     #[serde(rename = "inlineData", alias = "inline_data", default)]
     inline_data: Option<InlineData>,
+    #[serde(rename = "functionCall", alias = "function_call", default)]
+    function_call: Option<FunctionCallWire>,
+}
+
+#[derive(Debug, Deserialize)]
+struct FunctionCallWire {
+    name: String,
+    #[serde(default)]
+    args: Value,
 }
 
 #[derive(Debug, Deserialize)]
@@ -122,7 +131,31 @@ fn build_body(req: &CompletionRequest) -> Value {
             }
             Role::Assistant => {
                 let parts = to_google_parts(&msg.content);
-                contents.push(json!({ "role": "model", "parts": parts }));
+                let mut all_parts = parts;
+                for call in &msg.tool_calls {
+                    let args = serde_json::from_str::<Value>(&call.arguments)
+                        .unwrap_or_else(|_| json!({ "raw": call.arguments }));
+                    all_parts.push(json!({
+                        "functionCall": {
+                            "name": call.name,
+                            "args": args,
+                        }
+                    }));
+                }
+                contents.push(json!({ "role": "model", "parts": all_parts }));
+            }
+            Role::Tool => {
+                contents.push(json!({
+                    "role": "user",
+                    "parts": [{
+                        "functionResponse": {
+                            "name": msg.name.as_deref().unwrap_or("tool_result"),
+                            "response": {
+                                "content": msg.content.as_str().unwrap_or_default(),
+                            }
+                        }
+                    }]
+                }));
             }
         }
     }
@@ -150,8 +183,45 @@ fn build_body(req: &CompletionRequest) -> Value {
     if !gen_config.is_empty() {
         body.insert("generationConfig".into(), Value::Object(gen_config));
     }
+    let function_declarations: Vec<Value> = req
+        .tools
+        .iter()
+        .filter_map(|t| {
+            let func = t.get("function")?;
+            Some(json!({
+                "name": func.get("name").cloned().unwrap_or(Value::Null),
+                "description": func.get("description").cloned().unwrap_or(Value::Null),
+                "parameters": to_google_schema(func.get("parameters").cloned().unwrap_or_else(|| json!({ "type": "object" }))),
+            }))
+        })
+        .collect();
+    if !function_declarations.is_empty() {
+        body.insert(
+            "tools".into(),
+            json!([{ "functionDeclarations": function_declarations }]),
+        );
+    }
 
     Value::Object(body)
+}
+
+fn to_google_schema(value: Value) -> Value {
+    match value {
+        Value::Object(map) => Value::Object(
+            map.into_iter()
+                .map(|(key, value)| {
+                    if key == "type" {
+                        if let Some(t) = value.as_str() {
+                            return (key, Value::String(t.to_ascii_uppercase()));
+                        }
+                    }
+                    (key, to_google_schema(value))
+                })
+                .collect(),
+        ),
+        Value::Array(items) => Value::Array(items.into_iter().map(to_google_schema).collect()),
+        other => other,
+    }
 }
 
 fn extract_text(resp: &GenerateResp) -> String {
@@ -178,6 +248,20 @@ fn extract_image_url(resp: &GenerateResp) -> Option<String> {
                 None
             }
         })
+}
+
+fn extract_tool_calls(resp: &GenerateResp) -> Vec<ToolCall> {
+    resp.candidates
+        .iter()
+        .filter_map(|c| c.content.as_ref())
+        .flat_map(|c| c.parts.iter())
+        .filter_map(|p| p.function_call.as_ref())
+        .map(|call| ToolCall {
+            id: call.name.clone(),
+            name: call.name.clone(),
+            arguments: call.args.to_string(),
+        })
+        .collect()
 }
 
 fn parse_usage(usage: Option<UsageWire>) -> Option<TokenUsage> {
@@ -251,10 +335,15 @@ impl Provider for GoogleProvider {
         }
         let parsed: GenerateResp =
             serde_json::from_str(&text).map_err(|e| format!("parse response: {e}; body={text}"))?;
+        let content = extract_text(&parsed);
+        let image_url = extract_image_url(&parsed);
+        let tool_calls = extract_tool_calls(&parsed);
+        let usage = parse_usage(parsed.usage);
         Ok(CompletionResponse {
-            content: extract_text(&parsed),
-            image_url: extract_image_url(&parsed),
-            usage: parse_usage(parsed.usage),
+            content,
+            image_url,
+            usage,
+            tool_calls,
         })
     }
 

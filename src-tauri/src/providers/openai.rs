@@ -1,5 +1,5 @@
 use crate::providers::{join_url, CompletionRequest, Provider, StreamCallback};
-use crate::types::{CompletionResponse, Model, TokenUsage};
+use crate::types::{CompletionResponse, Model, TokenUsage, ToolCall};
 use async_trait::async_trait;
 use eventsource_stream::Eventsource;
 use futures_util::StreamExt;
@@ -38,6 +38,21 @@ struct Choice {
 struct ChatMessageWire {
     #[serde(default)]
     content: Option<String>,
+    #[serde(default)]
+    tool_calls: Vec<ToolCallWire>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ToolCallWire {
+    id: String,
+    function: ToolCallFunctionWire,
+}
+
+#[derive(Debug, Deserialize)]
+struct ToolCallFunctionWire {
+    name: String,
+    #[serde(default)]
+    arguments: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -101,8 +116,35 @@ fn build_body(
                 crate::types::Role::System => "system",
                 crate::types::Role::User => "user",
                 crate::types::Role::Assistant => "assistant",
+                crate::types::Role::Tool => "tool",
             };
-            json!({ "role": role, "content": m.content })
+            let mut msg = serde_json::Map::new();
+            msg.insert("role".into(), Value::String(role.to_string()));
+            msg.insert("content".into(), m.content.clone());
+            if let Some(name) = m.name.as_ref() {
+                msg.insert("name".into(), Value::String(name.clone()));
+            }
+            if let Some(tool_call_id) = m.tool_call_id.as_ref() {
+                msg.insert("tool_call_id".into(), Value::String(tool_call_id.clone()));
+            }
+            if !m.tool_calls.is_empty() {
+                let calls = m
+                    .tool_calls
+                    .iter()
+                    .map(|call| {
+                        json!({
+                            "id": call.id,
+                            "type": "function",
+                            "function": {
+                                "name": call.name,
+                                "arguments": call.arguments,
+                            }
+                        })
+                    })
+                    .collect();
+                msg.insert("tool_calls".into(), Value::Array(calls));
+            }
+            Value::Object(msg)
         })
         .collect();
 
@@ -198,11 +240,26 @@ impl Provider for OpenAiProvider {
         }
         let parsed: ChatResp = serde_json::from_str(&text)
             .map_err(|e| format!("parse completion response: {e}; body={text}"))?;
-        let content = parsed
+        let message = parsed
             .choices
             .into_iter()
             .next()
-            .and_then(|c| c.message.content)
+            .map(|c| c.message);
+        let content = message
+            .as_ref()
+            .and_then(|m| m.content.clone())
+            .unwrap_or_default();
+        let tool_calls = message
+            .map(|m| {
+                m.tool_calls
+                    .into_iter()
+                    .map(|call| ToolCall {
+                        id: call.id,
+                        name: call.function.name,
+                        arguments: call.function.arguments,
+                    })
+                    .collect()
+            })
             .unwrap_or_default();
         Ok(CompletionResponse {
             content,
@@ -212,6 +269,7 @@ impl Provider for OpenAiProvider {
                 total_tokens: u.total_tokens,
             }),
             image_url: None,
+            tool_calls,
         })
     }
 

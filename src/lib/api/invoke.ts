@@ -1,6 +1,6 @@
 import { invoke, Channel } from "@tauri-apps/api/core";
 import type { Proxy, ProxyInput } from "$lib/types/proxy";
-import type { PresetUtilities, Prompt, Settings } from "$lib/types/settings";
+import type { AgentDefinition, AgentPreset, AgentPresetMeta, PresetUtilities, Prompt, Settings } from "$lib/types/settings";
 import type { Preset, PresetMeta } from "$lib/types/preset";
 import type {
   Chat,
@@ -12,6 +12,8 @@ import type {
   NewChatInput,
   SendCompletionInput,
   StreamEvent,
+  ToolExecutionInput,
+  ToolExecutionResponse,
 } from "$lib/types/chat";
 
 export const api = {
@@ -29,6 +31,8 @@ export const api = {
   listModels: (proxyId: string) => invoke<Model[]>("list_models", { proxyId }),
   sendCompletion: (input: SendCompletionInput) =>
     invoke<CompletionResponse>("send_completion", { input }),
+  sendCompletionCancellable: (input: SendCompletionInput, requestId: string) =>
+    invoke<CompletionResponse>("send_completion_cancellable", { input, requestId }),
 
   streamCompletion(
     input: SendCompletionInput,
@@ -41,6 +45,8 @@ export const api = {
   },
   cancelStream: (streamId: string) => invoke<void>("cancel_stream", { streamId }),
   cancelGeneration: (id: string) => invoke<void>("cancel_stream", { streamId: id }),
+  executeTool: (input: ToolExecutionInput) =>
+    invoke<ToolExecutionResponse>("execute_tool", { input }),
 
   generateImage: (input: ImageGenInput) =>
     invoke<ImageGenResponse>("generate_image", { input }),
@@ -66,8 +72,17 @@ export const api = {
     invoke<Preset>("create_preset", { name, prompts, utilities }),
   deletePreset: (id: string) => invoke<void>("delete_preset", { id }),
 
+  listAgentPresets: () => invoke<AgentPresetMeta[]>("list_agent_presets"),
+  loadAgentPreset: (id: string) => invoke<AgentPreset>("load_agent_preset", { id }),
+  saveAgentPreset: (preset: AgentPreset) => invoke<AgentPreset>("save_agent_preset", { preset }),
+  createAgentPreset: (name: string, agents: AgentDefinition[]) =>
+    invoke<AgentPreset>("create_agent_preset", { name, agents }),
+  deleteAgentPreset: (id: string) => invoke<void>("delete_agent_preset", { id }),
+
   exportPreset: (presetId: string) => invoke<boolean>("export_preset", { presetId }),
   importPreset: () => invoke<Preset | null>("import_preset"),
+  exportAgentPreset: (presetId: string) => invoke<boolean>("export_agent_preset", { presetId }),
+  importAgentPreset: () => invoke<AgentPreset | null>("import_agent_preset"),
   exportProfile: () => invoke<boolean>("export_profile"),
   importProfile: () => invoke<number>("import_profile"),
 };

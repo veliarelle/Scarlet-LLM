@@ -1,5 +1,5 @@
 use crate::providers::{join_url, CompletionRequest, Provider, StreamCallback, StreamItem};
-use crate::types::{CompletionResponse, Model, Role, TokenUsage};
+use crate::types::{CompletionResponse, Model, Role, TokenUsage, ToolCall};
 use async_trait::async_trait;
 use eventsource_stream::Eventsource;
 use futures_util::StreamExt;
@@ -55,6 +55,14 @@ struct OutputItem {
     kind: String,
     #[serde(default)]
     content: Vec<ContentPart>,
+    #[serde(default)]
+    id: Option<String>,
+    #[serde(default)]
+    call_id: Option<String>,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    arguments: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -132,7 +140,24 @@ fn build_body(
                 input.push(json!({ "role": "user", "content": msg.content }));
             }
             Role::Assistant => {
-                input.push(json!({ "role": "assistant", "content": msg.content }));
+                if !msg.content.as_str().unwrap_or_default().is_empty() {
+                    input.push(json!({ "role": "assistant", "content": msg.content }));
+                }
+                for call in &msg.tool_calls {
+                    input.push(json!({
+                        "type": "function_call",
+                        "call_id": call.id,
+                        "name": call.name,
+                        "arguments": call.arguments,
+                    }));
+                }
+            }
+            Role::Tool => {
+                input.push(json!({
+                    "type": "function_call_output",
+                    "call_id": msg.tool_call_id.as_deref().unwrap_or_default(),
+                    "output": msg.content.as_str().unwrap_or_default(),
+                }));
             }
         }
     }
@@ -212,6 +237,26 @@ fn extract_text(resp: ResponsesResp) -> String {
         .join("")
 }
 
+fn extract_tool_calls(resp: &ResponsesResp) -> Vec<ToolCall> {
+    resp.output
+        .iter()
+        .filter(|item| item.kind == "function_call")
+        .filter_map(|item| {
+            let name = item.name.as_ref()?.clone();
+            Some(ToolCall {
+                id: item
+                    .call_id
+                    .as_ref()
+                    .or(item.id.as_ref())
+                    .cloned()
+                    .unwrap_or_else(|| name.clone()),
+                name,
+                arguments: item.arguments.clone().unwrap_or_else(|| "{}".to_string()),
+            })
+        })
+        .collect()
+}
+
 #[async_trait]
 impl Provider for ResponsesProvider {
     async fn list_models(&self, base_url: &str, key: &str) -> Result<Vec<Model>, String> {
@@ -271,11 +316,13 @@ impl Provider for ResponsesProvider {
             completion_tokens: u.output_tokens,
             total_tokens: u.total_tokens,
         });
+        let tool_calls = extract_tool_calls(&parsed);
         let content = extract_text(parsed);
         Ok(CompletionResponse {
             content,
             usage,
             image_url: None,
+            tool_calls,
         })
     }
 

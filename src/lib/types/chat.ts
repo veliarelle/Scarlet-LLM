@@ -1,4 +1,4 @@
-export type Role = "system" | "user" | "assistant";
+export type Role = "system" | "user" | "assistant" | "tool";
 
 export interface TextPart { type: "text"; text: string }
 export interface ImagePart { type: "image_url"; image_url: { url: string } }
@@ -16,6 +16,15 @@ export interface Attachment {
 export interface ChatMessage {
   role: Role;
   content: string | ContentPart[];
+  name?: string;
+  tool_call_id?: string;
+  tool_calls?: ToolCall[];
+}
+
+export interface ToolCall {
+  id: string;
+  name: string;
+  arguments: string;
 }
 
 export interface VariationMeta {
@@ -89,6 +98,16 @@ export interface CompletionResponse {
   content: string;
   usage?: TokenUsage | null;
   image_url?: string | null;
+  tool_calls?: ToolCall[];
+}
+
+export interface ToolExecutionInput {
+  definition: unknown;
+  arguments: unknown;
+}
+
+export interface ToolExecutionResponse {
+  content: string;
 }
 
 export interface SendCompletionInput {

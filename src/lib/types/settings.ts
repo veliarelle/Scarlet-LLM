@@ -31,6 +31,32 @@ export interface PresetUtilities {
   summarize_prompt_id?: string | null;
 }
 
+export interface AgentDefinition {
+  id: string;
+  name: string;
+  description: string;
+  prompt: string;
+  enabled: boolean;
+  model?: string | null;
+  proxy_id?: string | null;
+  tool_names: string[];
+}
+
+export interface AgentPreset {
+  id: string;
+  name: string;
+  agents: AgentDefinition[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentPresetMeta {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export type Theme = "dark" | "light" | "custom";
 export type Language = "ru" | "en";
 
@@ -57,6 +83,7 @@ export interface Settings {
   language: Language;
   active_proxy_id: string | null;
   active_preset_id: string | null;
+  active_agent_preset_id: string | null;
   active_model: string | null;
   active_chat_id: string | null;
   user_name: string;
@@ -73,6 +100,7 @@ export interface Settings {
   utilities: PromptUtilities;
   web_search: boolean;
   agents: boolean;
+  agent_definitions: AgentDefinition[];
   tools: boolean;
   tool_definitions: string; // JSON array of tool objects
   theme: Theme;
@@ -88,6 +116,7 @@ export const DEFAULT_SETTINGS: Settings = {
   language: "ru",
   active_proxy_id: null,
   active_preset_id: null,
+  active_agent_preset_id: null,
   active_model: null,
   active_chat_id: null,
   user_name: "User",
@@ -111,6 +140,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   web_search: false,
   agents: false,
+  agent_definitions: [],
   tools: false,
   theme: "dark",
   custom_colors: {},

@@ -2,7 +2,7 @@ use crate::providers::{provider_for, CompletionRequest, StreamItem};
 use crate::types::{Attachment, ChatMessage, CompletionResponse, Model, Proxy, Role, TokenUsage};
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tauri::ipc::Channel;
@@ -63,6 +63,44 @@ pub async fn send_completion(
         prompt_caching: input.prompt_caching,
     };
     provider.complete(&proxy.base_url, &proxy.key, req).await
+}
+
+#[tauri::command]
+pub async fn send_completion_cancellable(
+    app: AppHandle,
+    state: State<'_, StreamState>,
+    input: SendCompletionInput,
+    request_id: String,
+) -> Result<CompletionResponse, String> {
+    let proxy = load_proxy(&app, &input.proxy_id)?;
+    let provider = provider_for(&proxy.kind);
+    let req = CompletionRequest {
+        model: input.model,
+        messages: input.messages,
+        params: input.params,
+        tools: input.tools,
+        web_search: input.web_search,
+        prompt_caching: input.prompt_caching,
+    };
+
+    let cancel = Arc::new(Notify::new());
+    {
+        let mut map = state.cancels.lock().map_err(|e| format!("lock: {e}"))?;
+        map.insert(request_id.clone(), cancel.clone());
+    }
+
+    let result = tokio::select! {
+        biased;
+        _ = cancel.notified() => Err("generation cancelled".to_string()),
+        r = provider.complete(&proxy.base_url, &proxy.key, req) => r,
+    };
+
+    {
+        let mut map = state.cancels.lock().map_err(|e| format!("lock: {e}"))?;
+        map.remove(&request_id);
+    }
+
+    result
 }
 
 #[derive(Clone, Serialize)]
@@ -132,6 +170,142 @@ pub fn cancel_stream(state: State<'_, StreamState>, stream_id: String) -> Result
         c.notify_waiters();
     }
     Ok(())
+}
+
+// ---------- Custom tools ----------
+
+#[derive(Debug, Deserialize)]
+pub struct ExecuteToolInput {
+    pub definition: Value,
+    pub arguments: Value,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ToolExecutionResponse {
+    pub content: String,
+}
+
+fn template_arg(args: &Value, key: &str) -> String {
+    let Some(value) = args.get(key) else {
+        return String::new();
+    };
+    value
+        .as_str()
+        .map(ToString::to_string)
+        .unwrap_or_else(|| value.to_string())
+}
+
+fn render_template_string(input: &str, args: &Value) -> String {
+    let mut out = input.replace("{{json}}", &args.to_string());
+    if let Some(obj) = args.as_object() {
+        for key in obj.keys() {
+            out = out.replace(&format!("{{{{{key}}}}}"), &template_arg(args, key));
+        }
+    }
+    out
+}
+
+fn render_template_value(value: &Value, args: &Value) -> Value {
+    match value {
+        Value::String(s) => Value::String(render_template_string(s, args)),
+        Value::Array(items) => Value::Array(
+            items
+                .iter()
+                .map(|item| render_template_value(item, args))
+                .collect(),
+        ),
+        Value::Object(map) => Value::Object(
+            map.iter()
+                .map(|(k, v)| (k.clone(), render_template_value(v, args)))
+                .collect(),
+        ),
+        other => other.clone(),
+    }
+}
+
+fn clipped_tool_body(text: String) -> String {
+    const MAX: usize = 20_000;
+    if text.chars().count() <= MAX {
+        text
+    } else {
+        let clipped: String = text.chars().take(MAX).collect();
+        format!("{clipped}\n\n[tool output truncated]")
+    }
+}
+
+#[tauri::command]
+pub async fn execute_tool(input: ExecuteToolInput) -> Result<ToolExecutionResponse, String> {
+    let executor = input
+        .definition
+        .get("executor")
+        .and_then(Value::as_object)
+        .ok_or("tool has no executor")?;
+    let executor_type = executor
+        .get("type")
+        .and_then(Value::as_str)
+        .unwrap_or("http");
+    if executor_type != "http" {
+        return Err(format!("unsupported executor type: {executor_type}"));
+    }
+
+    let raw_url = executor
+        .get("url")
+        .and_then(Value::as_str)
+        .ok_or("HTTP tool executor requires url")?;
+    let url = render_template_string(raw_url, &input.arguments);
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err("HTTP tool url must start with http:// or https://".to_string());
+    }
+
+    let method = executor
+        .get("method")
+        .and_then(Value::as_str)
+        .unwrap_or("GET")
+        .to_uppercase();
+    let method = reqwest::Method::from_bytes(method.as_bytes())
+        .map_err(|e| format!("invalid HTTP method: {e}"))?;
+    let timeout_ms = executor
+        .get("timeout_ms")
+        .and_then(Value::as_u64)
+        .unwrap_or(30_000)
+        .clamp(1_000, 120_000);
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_millis(timeout_ms))
+        .build()
+        .map_err(|e| format!("cannot build HTTP client: {e}"))?;
+
+    let mut req = client.request(method.clone(), url);
+    if let Some(headers) = executor.get("headers").and_then(Value::as_object) {
+        for (key, value) in headers {
+            if let Some(v) = value.as_str() {
+                req = req.header(key, render_template_string(v, &input.arguments));
+            }
+        }
+    }
+
+    if let Some(body) = executor.get("body") {
+        let rendered = render_template_value(body, &input.arguments);
+        if let Some(text) = rendered.as_str() {
+            req = req.body(text.to_string());
+        } else {
+            req = req.json(&rendered);
+        }
+    } else if method != reqwest::Method::GET && method != reqwest::Method::HEAD {
+        req = req.json(&input.arguments);
+    }
+
+    let resp = req
+        .send()
+        .await
+        .map_err(|e| format!("tool HTTP request failed: {e}"))?;
+    let status = resp.status();
+    let text = resp
+        .text()
+        .await
+        .map_err(|e| format!("tool HTTP response read failed: {e}"))?;
+    Ok(ToolExecutionResponse {
+        content: clipped_tool_body(format!("HTTP {status}\n{text}")),
+    })
 }
 
 // ---------- Image generation ----------
@@ -500,6 +674,9 @@ async fn generate_openrouter_image(
             messages: vec![ChatMessage {
                 role: Role::User,
                 content: build_image_content(prompt, attachments),
+                name: None,
+                tool_call_id: None,
+                tool_calls: Vec::new(),
             }],
             tools: Vec::new(),
             web_search: false,
@@ -551,6 +728,9 @@ pub async fn generate_image(
                         messages: vec![ChatMessage {
                             role: Role::User,
                             content: build_image_content(&input.prompt, &input.attachments),
+                            name: None,
+                            tool_call_id: None,
+                            tool_calls: Vec::new(),
                         }],
                         params: input.params,
                         tools: Vec::new(),

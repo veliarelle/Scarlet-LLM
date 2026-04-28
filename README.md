@@ -15,14 +15,12 @@ Google/Gemini-style providers. It is currently beta software.
 - File and image attachments in chats and image-generation requests;
 - Prompt and parameter managers. Scarlet LLM does not send anything by default;
 - Chat history, message variations, forks, and regeneration;
-- Themes, background image, translucency, and UI scale controls.
+- Agents, custom tools usage.
 
 ## Plans
 
-- Agent/tool execution;
-- Full import/export for profiles and backups;
-- Proper English/Русский localization;
 - Chat groups (claude-like projects);
+- Idk for now. 
 
 ## Requirements
 
@@ -45,6 +43,13 @@ sudo pacman -S --needed \
 ```
 
 Install Java/Android tooling only if you need Android builds.
+
+## Installation
+
+For Android: Install the apk from releases.
+For Linux: Install the appimage/.deb/bin from releases, depending on your Linux distributive.
+
+To compile the app yourself, follow the Development section.
 
 ## Development
 

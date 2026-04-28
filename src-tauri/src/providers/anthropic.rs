@@ -1,5 +1,5 @@
 use crate::providers::{CompletionRequest, Provider, StreamCallback, StreamItem};
-use crate::types::{CompletionResponse, Model, Role, TokenUsage};
+use crate::types::{CompletionResponse, Model, Role, TokenUsage, ToolCall};
 use async_trait::async_trait;
 use eventsource_stream::Eventsource;
 use futures_util::StreamExt;
@@ -37,6 +37,12 @@ struct ContentBlock {
     kind: String,
     #[serde(default)]
     text: Option<String>,
+    #[serde(default)]
+    id: Option<String>,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    input: Option<Value>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -155,8 +161,34 @@ fn build_body(req: &CompletionRequest, stream: bool) -> Value {
                 messages.push(json!({ "role": "user", "content": content }));
             }
             Role::Assistant => {
-                let content = to_anthropic_content(&msg.content);
-                messages.push(json!({ "role": "assistant", "content": content }));
+                let mut blocks = Vec::new();
+                if !msg.content.as_str().unwrap_or_default().is_empty() {
+                    match to_anthropic_content(&msg.content) {
+                        Value::Array(parts) => blocks.extend(parts),
+                        other => blocks.push(other),
+                    }
+                }
+                for call in &msg.tool_calls {
+                    let input = serde_json::from_str::<Value>(&call.arguments)
+                        .unwrap_or_else(|_| json!({ "raw": call.arguments }));
+                    blocks.push(json!({
+                        "type": "tool_use",
+                        "id": call.id,
+                        "name": call.name,
+                        "input": input,
+                    }));
+                }
+                messages.push(json!({ "role": "assistant", "content": blocks }));
+            }
+            Role::Tool => {
+                messages.push(json!({
+                    "role": "user",
+                    "content": [{
+                        "type": "tool_result",
+                        "tool_use_id": msg.tool_call_id.as_deref().unwrap_or_default(),
+                        "content": msg.content.as_str().unwrap_or_default(),
+                    }]
+                }));
             }
         }
     }
@@ -200,8 +232,23 @@ fn build_body(req: &CompletionRequest, stream: bool) -> Value {
             }
         }
     }
-    if !tools_arr.is_empty() {
-        body.insert("tools".into(), Value::Array(tools_arr));
+    let converted: Vec<Value> = tools_arr
+        .into_iter()
+        .map(|t| {
+            if t.get("type").and_then(|v| v.as_str()) == Some("function") {
+                if let Some(func) = t.get("function") {
+                    return json!({
+                        "name": func.get("name").cloned().unwrap_or(Value::Null),
+                        "description": func.get("description").cloned().unwrap_or(Value::Null),
+                        "input_schema": func.get("parameters").cloned().unwrap_or_else(|| json!({ "type": "object" })),
+                    });
+                }
+            }
+            t
+        })
+        .collect();
+    if !converted.is_empty() {
+        body.insert("tools".into(), Value::Array(converted));
     }
     if stream {
         body.insert("stream".into(), Value::Bool(true));
@@ -277,11 +324,29 @@ impl Provider for AnthropicProvider {
             serde_json::from_str(&text).map_err(|e| format!("parse response: {e}; body={text}"))?;
         let content = parsed
             .content
-            .into_iter()
+            .iter()
             .filter(|b| b.kind == "text")
-            .filter_map(|b| b.text)
+            .filter_map(|b| b.text.clone())
             .collect::<Vec<_>>()
             .join("");
+        let tool_calls = parsed
+            .content
+            .into_iter()
+            .filter(|b| b.kind == "tool_use")
+            .filter_map(|b| {
+                let id = b.id?;
+                let name = b.name?;
+                let arguments = b
+                    .input
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "{}".to_string());
+                Some(ToolCall {
+                    id,
+                    name,
+                    arguments,
+                })
+            })
+            .collect();
         Ok(CompletionResponse {
             content,
             usage: parsed.usage.map(|u| TokenUsage {
@@ -290,6 +355,7 @@ impl Provider for AnthropicProvider {
                 total_tokens: u.input_tokens + u.output_tokens,
             }),
             image_url: None,
+            tool_calls,
         })
     }
 

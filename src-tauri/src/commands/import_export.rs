@@ -1,5 +1,5 @@
-use crate::storage::{json_store, presets_dir, settings_path};
-use crate::types::{Preset, Settings};
+use crate::storage::{agent_presets_dir, json_store, presets_dir, settings_path};
+use crate::types::{AgentPreset, Preset, Settings};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -14,6 +14,8 @@ struct ProfileExport {
     exported_at: DateTime<Utc>,
     settings: Settings,
     presets: Vec<Preset>,
+    #[serde(default)]
+    agent_presets: Vec<AgentPreset>,
 }
 
 fn preset_path(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
@@ -23,11 +25,25 @@ fn preset_path(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
     Ok(presets_dir(app)?.join(format!("{id}.json")))
 }
 
+fn agent_preset_path(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
+    if id.is_empty() || id.contains('/') || id.contains('\\') || id.contains("..") {
+        return Err(format!("invalid agent preset id {id}"));
+    }
+    Ok(agent_presets_dir(app)?.join(format!("{id}.json")))
+}
+
 fn valid_id(id: &str) -> bool {
     !id.is_empty() && !id.contains('/') && !id.contains('\\') && !id.contains("..")
 }
 
 fn sanitize_preset(mut preset: Preset) -> Preset {
+    if !valid_id(&preset.id) {
+        preset.id = Uuid::new_v4().to_string();
+    }
+    preset
+}
+
+fn sanitize_agent_preset(mut preset: AgentPreset) -> AgentPreset {
     if !valid_id(&preset.id) {
         preset.id = Uuid::new_v4().to_string();
     }
@@ -53,6 +69,25 @@ fn read_all_presets(app: &AppHandle) -> Result<Vec<Preset>, String> {
     Ok(presets)
 }
 
+fn read_all_agent_presets(app: &AppHandle) -> Result<Vec<AgentPreset>, String> {
+    let dir = agent_presets_dir(app)?;
+    let mut presets = Vec::new();
+    for entry in std::fs::read_dir(&dir).map_err(|e| format!("read_dir: {e}"))? {
+        let entry = entry.map_err(|e| format!("entry: {e}"))?;
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) != Some("json") {
+            continue;
+        }
+        if let Ok(preset) = json_store::read::<AgentPreset>(&path) {
+            if !preset.id.is_empty() {
+                presets.push(preset);
+            }
+        }
+    }
+    presets.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    Ok(presets)
+}
+
 fn write_presets(app: &AppHandle, presets: Vec<Preset>) -> Result<usize, String> {
     let mut count = 0;
     for preset in presets.into_iter().map(sanitize_preset) {
@@ -66,6 +101,23 @@ fn write_presets(app: &AppHandle, presets: Vec<Preset>) -> Result<usize, String>
 fn write_preset(app: &AppHandle, preset: Preset) -> Result<Preset, String> {
     let preset = sanitize_preset(preset);
     let path = preset_path(app, &preset.id)?;
+    json_store::write_atomic(&path, &preset)?;
+    Ok(preset)
+}
+
+fn write_agent_presets(app: &AppHandle, presets: Vec<AgentPreset>) -> Result<usize, String> {
+    let mut count = 0;
+    for preset in presets.into_iter().map(sanitize_agent_preset) {
+        let path = agent_preset_path(app, &preset.id)?;
+        json_store::write_atomic(&path, &preset)?;
+        count += 1;
+    }
+    Ok(count)
+}
+
+fn write_agent_preset(app: &AppHandle, preset: AgentPreset) -> Result<AgentPreset, String> {
+    let preset = sanitize_agent_preset(preset);
+    let path = agent_preset_path(app, &preset.id)?;
     json_store::write_atomic(&path, &preset)?;
     Ok(preset)
 }
@@ -153,6 +205,23 @@ pub async fn import_preset(app: AppHandle) -> Result<Option<Preset>, String> {
 }
 
 #[tauri::command]
+pub async fn export_agent_preset(app: AppHandle, preset_id: String) -> Result<bool, String> {
+    let preset: AgentPreset = json_store::read(&agent_preset_path(&app, &preset_id)?)?;
+    let file_name = format!("scarlet-agent-preset-{}.json", file_name_safe(&preset.name));
+    save_json(&app, "Export agent preset", &file_name, &preset).await
+}
+
+#[tauri::command]
+pub async fn import_agent_preset(app: AppHandle) -> Result<Option<AgentPreset>, String> {
+    let Some(text) = pick_json(&app, "Import agent preset").await? else {
+        return Ok(None);
+    };
+    let preset: AgentPreset =
+        serde_json::from_str(&text).map_err(|e| format!("parse agent preset export: {e}"))?;
+    write_agent_preset(&app, preset).map(Some)
+}
+
+#[tauri::command]
 pub async fn export_profile(app: AppHandle) -> Result<bool, String> {
     let settings: Settings = json_store::read_or_default(&settings_path(&app)?)?;
     let export = ProfileExport {
@@ -160,6 +229,7 @@ pub async fn export_profile(app: AppHandle) -> Result<bool, String> {
         exported_at: Utc::now(),
         settings: sanitize_profile_settings(settings),
         presets: read_all_presets(&app)?,
+        agent_presets: read_all_agent_presets(&app)?,
     };
     save_json(&app, "Export profile", "scarlet-profile.json", &export).await
 }
@@ -172,9 +242,10 @@ pub async fn import_profile(app: AppHandle) -> Result<usize, String> {
     let profile: ProfileExport =
         serde_json::from_str(&text).map_err(|e| format!("parse profile export: {e}"))?;
     let imported = write_presets(&app, profile.presets)?;
+    let agent_imported = write_agent_presets(&app, profile.agent_presets)?;
     json_store::write_atomic(
         &settings_path(&app)?,
         &sanitize_profile_settings(profile.settings),
     )?;
-    Ok(imported)
+    Ok(imported + agent_imported)
 }

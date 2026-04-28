@@ -8,10 +8,12 @@
   let open = $state(false);
   let customMode = $state(false);
   let customVal = $state("");
+  let search = $state("");
 
   function close() {
     open = false;
     customMode = false;
+    search = "";
   }
 
   async function pick(m: string) {
@@ -28,6 +30,12 @@
 
   async function refresh() {
     if ($settings.active_proxy_id) await models.load($settings.active_proxy_id);
+  }
+
+  function modelMatches(m: { id: string; name?: string | null }, query: string): boolean {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return m.id.toLowerCase().includes(q) || (m.name ?? "").toLowerCase().includes(q);
   }
 
   // Группируем модели по префиксу провайдера, если возможно
@@ -54,7 +62,8 @@
     return order.map((g) => ({ group: g, models: groups[g] }));
   }
 
-  const grouped = $derived(groupModels($models.list));
+  const filteredModels = $derived($models.list.filter((m) => modelMatches(m, search)));
+  const grouped = $derived(groupModels(filteredModels));
 
   function shorten(m: string): string {
     return m.length > 22 ? m.slice(0, 22) + "…" : m;
@@ -86,12 +95,24 @@
         </button>
       </div>
 
+      <div class="search-wrap">
+        <input
+          class="search-input"
+          bind:value={search}
+          placeholder={$tr("model.search")}
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </div>
+
       {#if $models.loading}
         <div class="dropdown-status">{$tr("model.loading")}</div>
       {:else if $models.error}
         <div class="dropdown-status err" title={$models.error}>{$tr("model.error")}</div>
-      {:else if grouped.length === 0}
+      {:else if $models.list.length === 0}
         <div class="dropdown-status">{$tr("model.empty")}</div>
+      {:else if grouped.length === 0}
+        <div class="dropdown-status">{$tr("model.noResults")}</div>
       {:else}
         {#each grouped as g (g.group)}
           <div class="dropdown-group">{g.group}</div>
@@ -102,6 +123,9 @@
               onclick={() => pick(m.id)}
             >
               <span class="m-name">{m.name ?? m.id}</span>
+              {#if m.name && m.name !== m.id}
+                <span class="m-id">{m.id}</span>
+              {/if}
               {#if $settings.active_model === m.id}
                 <Check size={13} color="var(--accent)" />
               {/if}
@@ -201,6 +225,22 @@
   .dropdown-status.err {
     color: var(--danger);
   }
+  .search-wrap {
+    padding: 4px 0 6px;
+  }
+  .search-input {
+    width: 100%;
+    height: 32px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 0 10px;
+    color: var(--text);
+    font-size: 12px;
+  }
+  .search-input:focus {
+    border-color: var(--accent-d);
+  }
   .dropdown-item {
     display: flex;
     align-items: center;
@@ -251,9 +291,18 @@
   }
   .dropdown-item .m-name {
     flex: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .m-id {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-3);
+    font-size: 11px;
   }
   .dropdown-divider {
     height: 1px;

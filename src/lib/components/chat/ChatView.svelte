@@ -23,10 +23,12 @@
     updateSummaryContent,
     updateMessageContent,
   } from "$lib/stores/chats";
-  import type { Attachment, Chat, ChatMessage, Message } from "$lib/types/chat";
+  import type { Attachment, Chat, ChatMessage, CompletionResponse, Message, ToolCall } from "$lib/types/chat";
   import { uid } from "$lib/utils/id";
   import { buildMessages, buildParams, buildTools, estimateContextTokens, transcriptFromMessages } from "$lib/utils/buildRequest";
-  import { DEFAULT_SUMMARIZE_PROMPT, type Settings } from "$lib/types/settings";
+  import { executeToolCalls, providerToolsForAgent } from "$lib/utils/tools";
+  import { applyAgentPrompt, applyAgentSettings, resolveAgentForRequest } from "$lib/utils/agents";
+  import { DEFAULT_SUMMARIZE_PROMPT, type AgentDefinition, type Settings } from "$lib/types/settings";
   import MessageBubble from "./MessageBubble.svelte";
   import InputArea from "./InputArea.svelte";
   import SummaryBoundary from "./SummaryBoundary.svelte";
@@ -36,9 +38,12 @@
   let isRegenerating = $state(false);
   let isImageGenerating = $state(false);
   let isSummarizing = $state(false);
+  let isAgentRunning = $state(false);
   let lastError = $state<string | null>(null);
   let activeStreamId = $state<string | null>(null);
   let summarizeStopRequested = false;
+  let agentStopRequested = false;
+  const MAX_AGENT_STEPS = 6;
 
   const lastMsgIsUser = $derived(
     !!$activeChat &&
@@ -46,7 +51,7 @@
       $activeChat.messages[$activeChat.messages.length - 1].role === "user"
   );
 
-  const canStopCurrent = $derived(generating && activeStreamId !== null);
+  const canStopCurrent = $derived(generating && (activeStreamId !== null || isAgentRunning));
   const contextUsed = $derived(estimateContextTokens($activeChat?.messages ?? [], $settings, $activeChat?.summary ?? null));
   const contextWindow = $derived(Math.max(0, Number($settings.context_window ?? 0)));
   const canSummarize = $derived(!!$activeChat && $activeChat.messages.length > 0 && !generating);
@@ -63,6 +68,10 @@
       reasoning: { ...s.reasoning },
       prompts: s.prompts.map((p) => ({ ...p })),
       utilities: { ...s.utilities },
+      agent_definitions: (s.agent_definitions ?? []).map((agent) => ({
+        ...agent,
+        tool_names: [...(agent.tool_names ?? [])],
+      })),
       custom_colors: { ...s.custom_colors },
     };
   }
@@ -95,13 +104,84 @@
     return content.slice(0, limit - TRUNCATED_MARKER.length) + TRUNCATED_MARKER;
   }
 
+  function completionInput(messages: ChatMessage[], requestSettings: Settings, tools = buildTools(requestSettings)) {
+    return {
+      proxy_id: requestSettings.active_proxy_id!,
+      model: requestSettings.active_model!,
+      messages,
+      params: buildParams(requestSettings),
+      tools,
+      web_search: requestSettings.web_search,
+      prompt_caching: requestSettings.prompt_caching,
+    };
+  }
+
+  function toolCalls(resp: CompletionResponse): ToolCall[] {
+    return resp.tool_calls ?? [];
+  }
+
+  function toolCallFallback(resp: CompletionResponse, requestSettings: Settings): string {
+    const calls = toolCalls(resp);
+    if (calls.length === 0) return resp.content;
+    if (requestSettings.agents) return resp.content;
+    const names = calls.map((c) => c.name).join(", ");
+    return resp.content || $tr("chat.toolCallsNeedAgents", { names });
+  }
+
+  async function runAgentCompletion(
+    initialMessages: ChatMessage[],
+    requestSettings: Settings,
+    tools: unknown[],
+    agent: AgentDefinition | null = null
+  ): Promise<CompletionResponse> {
+    const working: ChatMessage[] = [...initialMessages];
+    let last: CompletionResponse | null = null;
+
+    for (let step = 0; step < MAX_AGENT_STEPS; step += 1) {
+      if (agentStopRequested) throw new Error("generation cancelled");
+
+      const resp = await api.sendCompletionCancellable(
+        completionInput(working, requestSettings, tools),
+        activeStreamId ?? uid()
+      );
+      last = resp;
+      const calls = toolCalls(resp);
+      if (calls.length === 0) return resp;
+
+      working.push({
+        role: "assistant",
+        content: resp.content ?? "",
+        tool_calls: calls,
+      });
+
+      const results = await executeToolCalls(calls, requestSettings, agent);
+      for (const result of results) {
+        working.push({
+          role: "tool",
+          content: result.content,
+          name: result.call.name,
+          tool_call_id: result.call.id,
+        });
+      }
+    }
+
+    return {
+      content: last?.content || $tr("chat.agentStepLimit"),
+      usage: last?.usage ?? null,
+      image_url: last?.image_url ?? null,
+      tool_calls: last?.tool_calls ?? [],
+    };
+  }
+
   async function send(text: string, attachments: Attachment[] = []) {
     if (generating) return;
     if ($imageMode) {
       if (text.trim() || attachments.length) await generateImage(text.trim(), attachments);
       return;
     }
-    const requestSettings = snapshotSettings();
+    const baseSettings = snapshotSettings();
+    const selectedAgent = resolveAgentForRequest(text, baseSettings);
+    const requestSettings = applyAgentSettings(baseSettings, selectedAgent);
     const requestStreaming = shouldStream(requestSettings);
     if (!requestSettings.active_proxy_id || !requestSettings.active_model) {
       lastError = $tr("chat.pickProxyAndModel");
@@ -125,25 +205,33 @@
       await persistActive();
     }
 
-    const messages = buildMessages($activeChat?.messages ?? [], requestSettings, $activeChat?.summary ?? null);
-    const params = buildParams(requestSettings);
-    const tools = buildTools(requestSettings);
-
-    const input = {
-      proxy_id: requestSettings.active_proxy_id,
-      model: requestSettings.active_model,
-      messages,
-      params,
-      tools,
-      web_search: requestSettings.web_search,
-      prompt_caching: requestSettings.prompt_caching,
-    };
+    const messages = applyAgentPrompt(
+      buildMessages($activeChat?.messages ?? [], requestSettings, $activeChat?.summary ?? null),
+      selectedAgent
+    );
+    const tools = selectedAgent ? providerToolsForAgent(requestSettings, selectedAgent) : buildTools(requestSettings);
+    const useAgentLoop = requestSettings.agents && tools.length > 0;
+    const input = completionInput(messages, requestSettings, tools);
 
     generating = true;
-    generationStreaming = requestStreaming;
+    generationStreaming = requestStreaming && tools.length === 0;
+    isAgentRunning = useAgentLoop;
+    agentStopRequested = false;
     let streamPlaceholderId: string | null = null;
     try {
-      if (requestStreaming) {
+      if (useAgentLoop) {
+        activeStreamId = uid();
+        const resp = await runAgentCompletion(messages, requestSettings, tools, selectedAgent);
+        const msg = pushMessage(
+          "assistant",
+          limitAssistantMessage(toolCallFallback(resp, requestSettings), requestSettings),
+          requestSettings.active_model
+        );
+        if (resp.image_url) {
+          setMessageImageUrl(msg.id, resp.image_url);
+        }
+        await persistActive();
+      } else if (requestStreaming && tools.length === 0) {
         const placeholder = pushMessage("assistant", "", requestSettings.active_model);
         streamPlaceholderId = placeholder.id;
         const streamId = uid();
@@ -175,10 +263,12 @@
         }
         await persistActive();
       } else {
-        const resp = await api.sendCompletion(input);
+        const requestId = uid();
+        activeStreamId = requestId;
+        const resp = await api.sendCompletionCancellable(input, requestId);
         const msg = pushMessage(
           "assistant",
-          limitAssistantMessage(resp.content, requestSettings),
+          limitAssistantMessage(toolCallFallback(resp, requestSettings), requestSettings),
           requestSettings.active_model
         );
         if (resp.image_url) {
@@ -197,12 +287,17 @@
     } finally {
       generating = false;
       generationStreaming = false;
+      isAgentRunning = false;
+      agentStopRequested = false;
       activeStreamId = null;
       activeGenerationId.set(null);
     }
   }
 
   async function stop() {
+    if (isAgentRunning) {
+      agentStopRequested = true;
+    }
     if (activeStreamId) {
       if (isSummarizing) summarizeStopRequested = true;
       await api.cancelGeneration(activeStreamId);
@@ -439,7 +534,9 @@
 
   async function regenerateMessage(msg: Message) {
     if (generating) return;
-    const requestSettings = snapshotSettings();
+    const baseSettings = snapshotSettings();
+    const selectedAgent = resolveAgentForRequest(msg.content, baseSettings);
+    const requestSettings = applyAgentSettings(baseSettings, selectedAgent);
     const requestStreaming = shouldStream(requestSettings);
     if (!requestSettings.active_proxy_id || !requestSettings.active_model) {
       lastError = $tr("chat.pickProxyAndModel");
@@ -489,28 +586,38 @@
     const idx = allMessages.findIndex((m) => m.id === msg.id);
     if (idx === -1) return;
     const contextSlice = allMessages.slice(0, idx);
-    const messages = buildMessages(contextSlice, requestSettings, $activeChat.summary ?? null);
-    const params = buildParams(requestSettings);
-    const tools = buildTools(requestSettings);
-
-    const input = {
-      proxy_id: requestSettings.active_proxy_id,
-      model: requestSettings.active_model,
-      messages,
-      params,
-      tools,
-      web_search: requestSettings.web_search,
-      prompt_caching: requestSettings.prompt_caching,
-    };
+    const messages = applyAgentPrompt(
+      buildMessages(contextSlice, requestSettings, $activeChat.summary ?? null),
+      selectedAgent
+    );
+    const tools = selectedAgent ? providerToolsForAgent(requestSettings, selectedAgent) : buildTools(requestSettings);
+    const useAgentLoop = requestSettings.agents && tools.length > 0;
+    const input = completionInput(messages, requestSettings, tools);
 
     generating = true;
-    generationStreaming = requestStreaming;
+    generationStreaming = requestStreaming && tools.length === 0;
     isRegenerating = true;
+    isAgentRunning = useAgentLoop;
+    agentStopRequested = false;
     let acc = "";
     let streamVariationAdded = false;
     let streamLimitReached = false;
     try {
-      if (requestStreaming) {
+      if (useAgentLoop) {
+        activeStreamId = uid();
+        addVariation(msg.id, "", requestSettings.active_model);
+        try {
+          const resp = await runAgentCompletion(messages, requestSettings, tools, selectedAgent);
+          updateMessageContent(msg.id, limitAssistantMessage(toolCallFallback(resp, requestSettings), requestSettings));
+          if (resp.image_url) {
+            setMessageImageUrl(msg.id, resp.image_url);
+          }
+          await persistActive();
+        } catch (inner) {
+          popVariation(msg.id);
+          throw inner;
+        }
+      } else if (requestStreaming && tools.length === 0) {
         addVariation(msg.id, "", requestSettings.active_model);
         streamVariationAdded = true;
         const streamId = uid();
@@ -539,8 +646,10 @@
       } else {
         addVariation(msg.id, "", requestSettings.active_model);
         try {
-          const resp = await api.sendCompletion(input);
-          updateMessageContent(msg.id, limitAssistantMessage(resp.content, requestSettings));
+          const requestId = uid();
+          activeStreamId = requestId;
+          const resp = await api.sendCompletionCancellable(input, requestId);
+          updateMessageContent(msg.id, limitAssistantMessage(toolCallFallback(resp, requestSettings), requestSettings));
           if (resp.image_url) {
             setMessageImageUrl(msg.id, resp.image_url);
           }
@@ -559,6 +668,8 @@
       generating = false;
       generationStreaming = false;
       isRegenerating = false;
+      isAgentRunning = false;
+      agentStopRequested = false;
       activeStreamId = null;
       activeGenerationId.set(null);
     }

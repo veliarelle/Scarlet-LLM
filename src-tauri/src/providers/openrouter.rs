@@ -1,5 +1,5 @@
 use crate::providers::{join_url, CompletionRequest, Provider, StreamCallback};
-use crate::types::{CompletionResponse, Model, TokenUsage};
+use crate::types::{CompletionResponse, Model, TokenUsage, ToolCall};
 use async_trait::async_trait;
 use eventsource_stream::Eventsource;
 use futures_util::StreamExt;
@@ -40,6 +40,21 @@ struct ChatMessageWire {
     content: Option<String>,
     #[serde(default)]
     images: Vec<ImageItem>,
+    #[serde(default)]
+    tool_calls: Vec<ToolCallWire>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ToolCallWire {
+    id: String,
+    function: ToolCallFunctionWire,
+}
+
+#[derive(Debug, Deserialize)]
+struct ToolCallFunctionWire {
+    name: String,
+    #[serde(default)]
+    arguments: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -96,8 +111,35 @@ fn build_body(req: &CompletionRequest, stream: bool) -> serde_json::Map<String, 
                 crate::types::Role::System => "system",
                 crate::types::Role::User => "user",
                 crate::types::Role::Assistant => "assistant",
+                crate::types::Role::Tool => "tool",
             };
-            json!({ "role": role, "content": m.content })
+            let mut msg = serde_json::Map::new();
+            msg.insert("role".into(), Value::String(role.to_string()));
+            msg.insert("content".into(), m.content.clone());
+            if let Some(name) = m.name.as_ref() {
+                msg.insert("name".into(), Value::String(name.clone()));
+            }
+            if let Some(tool_call_id) = m.tool_call_id.as_ref() {
+                msg.insert("tool_call_id".into(), Value::String(tool_call_id.clone()));
+            }
+            if !m.tool_calls.is_empty() {
+                let calls = m
+                    .tool_calls
+                    .iter()
+                    .map(|call| {
+                        json!({
+                            "id": call.id,
+                            "type": "function",
+                            "function": {
+                                "name": call.name,
+                                "arguments": call.arguments,
+                            }
+                        })
+                    })
+                    .collect();
+                msg.insert("tool_calls".into(), Value::Array(calls));
+            }
+            Value::Object(msg)
         })
         .collect();
 
@@ -204,14 +246,26 @@ impl Provider for OpenRouterProvider {
                 content: String::new(),
                 usage: usage_from_wire(parsed.usage),
                 image_url: None,
+                tool_calls: Vec::new(),
             });
         };
         let image_url = extract_image_url(&choice.message);
         let content = choice.message.content.unwrap_or_default();
+        let tool_calls = choice
+            .message
+            .tool_calls
+            .into_iter()
+            .map(|call| ToolCall {
+                id: call.id,
+                name: call.function.name,
+                arguments: call.function.arguments,
+            })
+            .collect();
         Ok(CompletionResponse {
             content,
             usage: usage_from_wire(parsed.usage),
             image_url,
+            tool_calls,
         })
     }
 

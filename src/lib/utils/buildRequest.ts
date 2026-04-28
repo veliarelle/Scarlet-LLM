@@ -1,5 +1,6 @@
 import type { ChatMessage, ChatSummary, ContentPart, Message } from "$lib/types/chat";
 import type { Settings } from "$lib/types/settings";
+import { providerToolSchemas } from "$lib/utils/tools";
 
 function parseValue(v: string): unknown {
   if (v === "true") return true;
@@ -226,11 +227,5 @@ export function buildParams(settings: Settings): Record<string, unknown> {
 }
 
 export function buildTools(settings: Settings): unknown[] {
-  if (!settings.tools) return [];
-  try {
-    const defs = JSON.parse(settings.tool_definitions || "[]");
-    return Array.isArray(defs) ? defs : [];
-  } catch {
-    return [];
-  }
+  return providerToolSchemas(settings);
 }

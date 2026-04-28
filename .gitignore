@@ -30,7 +30,6 @@ settings.json
 proxies.json
 presets/
 chats/
-/map.png
 
 # Environment files and secrets
 .env
@@ -46,6 +45,9 @@ keystore.properties
 key.properties
 src-tauri/gen/android/keystore.properties
 src-tauri/gen/android/key.properties
+
+# Local helper scripts
+bump-version.sh
 
 # Release artifacts
 *.apk
