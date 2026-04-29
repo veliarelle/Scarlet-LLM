@@ -434,6 +434,11 @@ fn build_image_content(prompt: &str, attachments: &[Attachment]) -> serde_json::
                 "type": "image_url",
                 "image_url": { "url": format!("data:{};base64,{}", att.mime_type, att.data) },
             }));
+        } else if let Some(text) = att.text.as_ref().filter(|s| !s.trim().is_empty()) {
+            parts.push(json!({
+                "type": "text",
+                "text": format!("[Attached file: {}, {}]\n\n{}", att.name, att.mime_type, text.trim()),
+            }));
         } else {
             parts.push(json!({
                 "type": "file",

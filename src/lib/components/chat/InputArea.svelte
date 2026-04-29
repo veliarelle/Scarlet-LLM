@@ -1,5 +1,8 @@
 <script lang="ts">
   import { Paperclip, Send, Settings as SettingsIcon, Square, X, FileText, Image as ImageIcon } from "lucide-svelte";
+  import { onMount } from "svelte";
+  import { getCurrentWebview } from "@tauri-apps/api/webview";
+  import { api } from "$lib/api/invoke";
   import { tr } from "$lib/i18n";
   import { settingsOpen } from "$lib/stores/ui";
   import type { Attachment } from "$lib/types/chat";
@@ -36,12 +39,50 @@
   let textareaEl: HTMLTextAreaElement | undefined = $state();
   let fileInputEl: HTMLInputElement | undefined = $state();
   let showContextNumber = $state(false);
+  let dragDepth = $state(0);
+  let dropActive = $state(false);
 
   $effect(() => {
     void text;
     if (!textareaEl) return;
     textareaEl.style.height = "auto";
     textareaEl.style.height = Math.min(textareaEl.scrollHeight, 240) + "px";
+  });
+
+  onMount(() => {
+    let nativeUnlisten: (() => void) | null = null;
+    void getCurrentWebview().onDragDropEvent((event) => {
+      const payload = event.payload;
+      if (payload.type === "over" || payload.type === "enter") {
+        if (!$settingsOpen) dropActive = true;
+        return;
+      }
+      if (payload.type === "drop") {
+        dragDepth = 0;
+        dropActive = false;
+        if ($settingsOpen) return;
+        void addDroppedPaths(payload.paths);
+        return;
+      }
+      dragDepth = 0;
+      dropActive = false;
+    }).then((unlisten) => {
+      nativeUnlisten = unlisten;
+    }).catch(() => {
+      nativeUnlisten = null;
+    });
+
+    window.addEventListener("dragenter", onWindowDragEnter);
+    window.addEventListener("dragover", onWindowDragOver);
+    window.addEventListener("dragleave", onWindowDragLeave);
+    window.addEventListener("drop", onWindowDrop);
+    return () => {
+      window.removeEventListener("dragenter", onWindowDragEnter);
+      window.removeEventListener("dragover", onWindowDragOver);
+      window.removeEventListener("dragleave", onWindowDragLeave);
+      window.removeEventListener("drop", onWindowDrop);
+      nativeUnlisten?.();
+    };
   });
 
   const canSend = $derived(
@@ -86,14 +127,124 @@
   async function onFileChange(e: Event) {
     const files = (e.target as HTMLInputElement).files;
     if (!files) return;
+    await addFiles(files);
+    if (fileInputEl) fileInputEl.value = "";
+  }
+
+  async function addFiles(files: Iterable<File>) {
+    const raw: { name: string; mimeType: string; data: string }[] = [];
     for (const file of files) {
-      const data = await readAsBase64(file);
+      raw.push({
+        name: file.name,
+        mimeType: file.type || "",
+        data: await readAsBase64(file),
+      });
+    }
+    if (raw.length === 0) return;
+
+    try {
+      const prepared = await api.prepareAttachments(raw);
+      if (prepared.length > 0) attachments = [...attachments, ...prepared];
+    } catch (e) {
+      console.error("Failed to prepare attachments", e);
       attachments = [
         ...attachments,
-        { id: uid(), name: file.name, mimeType: file.type || "application/octet-stream", data },
+        ...raw.map((file) => ({
+          id: uid(),
+          name: file.name,
+          mimeType: file.mimeType || "application/octet-stream",
+          data: file.data,
+          text: null,
+        })),
       ];
     }
-    if (fileInputEl) fileInputEl.value = "";
+  }
+
+  async function addDroppedPaths(paths: string[]) {
+    if (paths.length === 0) return;
+    try {
+      const dropped = await api.readDroppedFiles(paths);
+      if (dropped.length > 0) attachments = [...attachments, ...dropped];
+    } catch (e) {
+      console.error("Failed to read dropped files", e);
+    }
+  }
+
+  function hasDraggedFiles(e: DragEvent): boolean {
+    return Array.from(e.dataTransfer?.types ?? []).includes("Files");
+  }
+
+  function onDragEnter(e: DragEvent) {
+    if (!hasDraggedFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepth += 1;
+    dropActive = true;
+  }
+
+  function onDragOver(e: DragEvent) {
+    if (!hasDraggedFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+    dropActive = true;
+  }
+
+  function onDragLeave(e: DragEvent) {
+    if (!hasDraggedFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) dropActive = false;
+  }
+
+  async function onDrop(e: DragEvent) {
+    if (!hasDraggedFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepth = 0;
+    dropActive = false;
+    await addFiles(Array.from(e.dataTransfer?.files ?? []));
+  }
+
+  function onWindowDragEnter(e: DragEvent) {
+    if (!hasDraggedFiles(e)) return;
+    e.preventDefault();
+    if ($settingsOpen) return;
+    dragDepth += 1;
+    dropActive = true;
+  }
+
+  function onWindowDragOver(e: DragEvent) {
+    if (!hasDraggedFiles(e)) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = $settingsOpen ? "none" : "copy";
+    if ($settingsOpen) return;
+    dropActive = true;
+  }
+
+  function onWindowDragLeave(e: DragEvent) {
+    if (!hasDraggedFiles(e)) return;
+    if ($settingsOpen) return;
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (
+      dragDepth === 0 ||
+      e.clientX <= 0 ||
+      e.clientY <= 0 ||
+      e.clientX >= window.innerWidth ||
+      e.clientY >= window.innerHeight
+    ) {
+      dropActive = false;
+    }
+  }
+
+  async function onWindowDrop(e: DragEvent) {
+    if (!hasDraggedFiles(e)) return;
+    e.preventDefault();
+    dragDepth = 0;
+    dropActive = false;
+    if ($settingsOpen) return;
+    await addFiles(Array.from(e.dataTransfer?.files ?? []));
   }
 
   function readAsBase64(file: File): Promise<string> {
@@ -113,8 +264,16 @@
   }
 </script>
 
-<div class="input-outer">
-  <div class="input-wrap">
+<div
+  class="input-outer"
+  ondragenter={onDragEnter}
+  ondragover={onDragOver}
+  ondragleave={onDragLeave}
+  ondrop={onDrop}
+  role="group"
+  aria-label={$tr("input.attachFile")}
+>
+  <div class="input-wrap" class:drop-active={dropActive}>
     {#if attachments.length > 0}
       <div class="att-row">
         {#each attachments as att (att.id)}
@@ -250,6 +409,12 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
+    position: relative;
+  }
+  .input-wrap.drop-active .input-box {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--bg-3) 82%, var(--accent));
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent);
   }
 
   /* Attachment chips */

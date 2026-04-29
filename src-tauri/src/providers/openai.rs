@@ -1,3 +1,4 @@
+use crate::commands::attachments::extract_text_from_base64;
 use crate::providers::{join_url, CompletionRequest, Provider, StreamCallback};
 use crate::types::{CompletionResponse, Model, TokenUsage, ToolCall};
 use async_trait::async_trait;
@@ -103,6 +104,87 @@ fn prompt_cache_key(model: &str) -> String {
     format!("scarlet-llm-{model}")
 }
 
+fn normalize_file_part(part: &Value) -> Value {
+    if let Some(file) = part.get("file") {
+        let name = file
+            .get("filename")
+            .and_then(Value::as_str)
+            .unwrap_or("attachment");
+        let file_data = file.get("file_data").and_then(Value::as_str).unwrap_or("");
+        let Some((media_type, data)) = parse_data_url(file_data) else {
+            return part.clone();
+        };
+        if media_type == "application/pdf" {
+            return part.clone();
+        }
+        return file_part_as_text(name, media_type, data);
+    }
+    let Some(source) = part.get("source") else {
+        return part.clone();
+    };
+    let Some(media_type) = source.get("media_type").and_then(Value::as_str) else {
+        return part.clone();
+    };
+    let Some(data) = source.get("data").and_then(Value::as_str) else {
+        return part.clone();
+    };
+    let name = part.get("name").and_then(Value::as_str).unwrap_or("attachment");
+
+    if media_type != "application/pdf" {
+        return file_part_as_text(name, media_type, data);
+    }
+
+    let mut file = serde_json::Map::new();
+    if !name.is_empty() {
+        file.insert("filename".into(), Value::String(name.to_string()));
+    }
+    file.insert(
+        "file_data".into(),
+        Value::String(format!("data:{media_type};base64,{data}")),
+    );
+
+    json!({
+        "type": "file",
+        "file": Value::Object(file),
+    })
+}
+
+fn file_part_as_text(name: &str, media_type: &str, data: &str) -> Value {
+    let text = extract_text_from_base64(name, media_type, data)
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| format!("[Attached file: {name}, {media_type}]\n\n{s}"))
+        .unwrap_or_else(|| {
+            format!(
+                "[Attached file: {name}, {media_type}]\n\nThis file type cannot be sent as an inline document to OpenAI Chat Completions. Convert it to text or PDF if the model needs its contents."
+            )
+        });
+    json!({ "type": "text", "text": text })
+}
+
+fn parse_data_url(file_data: &str) -> Option<(&str, &str)> {
+    file_data
+        .strip_prefix("data:")
+        .and_then(|rest| rest.split_once(";base64,"))
+}
+
+fn normalize_openai_content(content: &Value) -> Value {
+    match content {
+        Value::Array(parts) => Value::Array(
+            parts
+                .iter()
+                .map(|part| {
+                    if part.get("type").and_then(Value::as_str) == Some("file") {
+                        normalize_file_part(part)
+                    } else {
+                        part.clone()
+                    }
+                })
+                .collect(),
+        ),
+        other => other.clone(),
+    }
+}
+
 fn build_body(
     req: &CompletionRequest,
     stream: bool,
@@ -120,7 +202,7 @@ fn build_body(
             };
             let mut msg = serde_json::Map::new();
             msg.insert("role".into(), Value::String(role.to_string()));
-            msg.insert("content".into(), m.content.clone());
+            msg.insert("content".into(), normalize_openai_content(&m.content));
             if let Some(name) = m.name.as_ref() {
                 msg.insert("name".into(), Value::String(name.clone()));
             }

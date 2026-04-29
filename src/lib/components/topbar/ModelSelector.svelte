@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Sparkles, ChevronDown, Check, Pencil, RotateCw } from "lucide-svelte";
+  import { onMount, tick } from "svelte";
   import { tr } from "$lib/i18n";
   import { settings } from "$lib/stores/settings";
   import { models } from "$lib/stores/models";
@@ -9,6 +10,44 @@
   let customMode = $state(false);
   let customVal = $state("");
   let search = $state("");
+  let dropdownEl = $state<HTMLDivElement | null>(null);
+  let dropdownShift = $state(0);
+
+  function placeDropdown() {
+    if (!dropdownEl) return;
+    const margin = 8;
+    const scale = Number(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1;
+    dropdownShift = 0;
+    requestAnimationFrame(() => {
+      if (!dropdownEl) return;
+      const rect = dropdownEl.getBoundingClientRect();
+      if (rect.left < margin) {
+        dropdownShift = (margin - rect.left) / scale;
+      } else if (rect.right > window.innerWidth - margin) {
+        dropdownShift = (window.innerWidth - margin - rect.right) / scale;
+      }
+    });
+  }
+
+  async function toggleOpen() {
+    open = !open;
+    if (open) {
+      await tick();
+      placeDropdown();
+    }
+  }
+
+  onMount(() => {
+    const update = () => {
+      if (open) placeDropdown();
+    };
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  });
 
   function close() {
     open = false;
@@ -73,14 +112,20 @@
 </script>
 
 <div class="selector-wrap" use:clickOutside={close}>
-  <button class="selector-btn" onclick={() => (open = !open)} title={display}>
+  <button class="selector-btn" onclick={toggleOpen} title={display} aria-label={display}>
     <Sparkles size={13} color="var(--accent)" />
-    <span>{shorten(display)}</span>
-    <ChevronDown size={13} color="var(--text-3)" />
+    <span class="model-label">{shorten(display)}</span>
+    <span class="selector-chevron">
+      <ChevronDown size={13} color="var(--text-3)" />
+    </span>
   </button>
 
   {#if open}
-    <div class="dropdown">
+    <div
+      bind:this={dropdownEl}
+      class="dropdown"
+      style={`--dropdown-shift: ${dropdownShift}px;`}
+    >
       <div class="dropdown-top">
         <button
           class="dropdown-item refresh-item"
@@ -181,39 +226,46 @@
     max-width: min(200px, 34vw);
     min-width: 0;
   }
-  .selector-btn span {
+  .model-label {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .selector-chevron {
+    display: flex;
   }
   .selector-btn:hover {
     background: var(--bg-4);
     color: var(--text);
   }
+  @media (max-width: 560px) {
+    .selector-btn {
+      width: 34px;
+      height: 34px;
+      justify-content: center;
+      padding: 0;
+      gap: 0;
+    }
+    .model-label,
+    .selector-chevron {
+      display: none;
+    }
+  }
 
   .dropdown {
-    position: fixed;
-    top: auto;
-    left: 8px;
-    right: 8px;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(calc(-50% + var(--dropdown-shift, 0px)));
+    width: min(360px, calc((100vw / var(--app-scale, 1)) - 16px));
     z-index: 200;
     background: var(--bg-3);
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 6px;
-    min-width: 230px;
-    max-height: min(360px, 55vh);
+    max-height: min(360px, calc((100vh / var(--app-scale, 1)) - 70px));
     overflow-y: auto;
     box-shadow: var(--shadow);
-  }
-  @media (min-width: 600px) {
-    .dropdown {
-      position: absolute;
-      top: calc(100% + 6px);
-      left: 0;
-      right: auto;
-      max-height: 360px;
-    }
   }
   .dropdown-group {
     padding: 6px 10px 4px;

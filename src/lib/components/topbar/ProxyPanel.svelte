@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Server, X, Plus, Pencil, Trash2, Save } from "lucide-svelte";
+  import { onMount } from "svelte";
   import { tr } from "$lib/i18n";
   import { proxies } from "$lib/stores/proxies";
   import { settings } from "$lib/stores/settings";
@@ -21,11 +22,40 @@
   };
 
   let expandedId = $state<string | null>(null);
+  let panelEl = $state<HTMLDivElement | null>(null);
+  let panelShift = $state(0);
 
   // Локальные edit-буферы по id, чтобы не дёргать backend на каждое нажатие
   let buffers = $state<Record<string, { name: string; base_url: string; key: string; kind: ProxyKind }>>({});
   let savedMap = $state<Record<string, boolean>>({});
   let savedTimerMap = new Map<string, ReturnType<typeof setTimeout>>();
+
+  function placePanel() {
+    if (!panelEl) return;
+    const margin = 8;
+    const scale = Number(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1;
+    panelShift = 0;
+    requestAnimationFrame(() => {
+      if (!panelEl) return;
+      const rect = panelEl.getBoundingClientRect();
+      if (rect.left < margin) {
+        panelShift = (margin - rect.left) / scale;
+      } else if (rect.right > window.innerWidth - margin) {
+        panelShift = (window.innerWidth - margin - rect.right) / scale;
+      }
+    });
+  }
+
+  onMount(() => {
+    placePanel();
+    const update = () => placePanel();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  });
 
   function close() {
     proxyPanelOpen.set(false);
@@ -83,7 +113,12 @@
   }
 </script>
 
-<div class="panel" use:clickOutside={close}>
+<div
+  bind:this={panelEl}
+  class="panel"
+  style={`--panel-shift: ${panelShift}px;`}
+  use:clickOutside={close}
+>
   <div class="panel-hdr">
     <Server size={15} color="var(--accent)" />
     <span>{$tr("proxy.panelTitle")}</span>
@@ -172,30 +207,20 @@
 
 <style>
   .panel {
-    position: fixed;
-    top: auto;
-    left: 8px;
-    right: 8px;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(calc(-50% + var(--panel-shift, 0px)));
+    width: min(380px, calc((100vw / var(--app-scale, 1)) - 16px));
+    max-height: min(70vh, calc((100vh / var(--app-scale, 1)) - 70px));
     z-index: 200;
     background: var(--bg-2);
     border: 1px solid var(--border);
     border-radius: 14px;
-    max-height: 70vh;
     box-shadow: var(--shadow);
     display: flex;
     flex-direction: column;
     overflow: hidden;
-  }
-  @media (min-width: 600px) {
-    .panel {
-      position: absolute;
-      top: calc(100% + 8px);
-      left: auto;
-      right: 0;
-      min-width: 320px;
-      max-width: 380px;
-      max-height: none;
-    }
   }
   .panel-hdr {
     display: flex;
@@ -216,7 +241,8 @@
   }
 
   .proxy-list {
-    max-height: 320px;
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
     padding: 6px;
   }

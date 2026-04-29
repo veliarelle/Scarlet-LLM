@@ -1,6 +1,6 @@
 [package]
 name = "scarlet-llm"
-version = "1.0.5"
+version = "1.0.6"
 description = "Scarlet LLM - local LLM frontend"
 authors = ["veliarelle"]
 edition = "2021"
@@ -26,6 +26,7 @@ thiserror = "2"
 anyhow = "1"
 eventsource-stream = "0.2"
 base64 = "0.22"
+flate2 = "1"
 tauri-plugin-dialog = "2"
 
 [target.'cfg(any(target_os = "linux", target_os = "dragonfly", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))'.dependencies]

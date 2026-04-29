@@ -58,6 +58,8 @@ pub struct Attachment {
     pub mime_type: String,
     /// Base64 payload without the data: URL prefix.
     pub data: String,
+    #[serde(default)]
+    pub text: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

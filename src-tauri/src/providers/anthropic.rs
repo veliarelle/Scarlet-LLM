@@ -1,3 +1,4 @@
+use crate::commands::attachments::extract_text_from_base64;
 use crate::providers::{CompletionRequest, Provider, StreamCallback, StreamItem};
 use crate::types::{CompletionResponse, Model, Role, TokenUsage, ToolCall};
 use async_trait::async_trait;
@@ -104,10 +105,18 @@ fn to_anthropic_content(content: &Value) -> Value {
                             let src = part.get("source")?;
                             let mime = src.get("media_type")?.as_str()?;
                             let data = src.get("data")?.as_str()?;
-                            Some(json!({
-                                "type": "document",
-                                "source": { "type": "base64", "media_type": mime, "data": data }
-                            }))
+                            if mime == "application/pdf" || mime == "text/plain" {
+                                Some(json!({
+                                    "type": "document",
+                                    "source": { "type": "base64", "media_type": mime, "data": data }
+                                }))
+                            } else {
+                                Some(file_part_as_text(
+                                    part.get("name").and_then(Value::as_str).unwrap_or("attachment"),
+                                    mime,
+                                    data,
+                                ))
+                            }
                         }
                         _ => None,
                     }
@@ -117,6 +126,18 @@ fn to_anthropic_content(content: &Value) -> Value {
         }
         other => other.clone(),
     }
+}
+
+fn file_part_as_text(name: &str, media_type: &str, data: &str) -> Value {
+    let text = extract_text_from_base64(name, media_type, data)
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| format!("[Attached file: {name}, {media_type}]\n\n{s}"))
+        .unwrap_or_else(|| {
+            format!(
+                "[Attached file: {name}, {media_type}]\n\nThis file type was not sent as a binary document because Claude document blocks are safest with PDF/plain text."
+            )
+        });
+    json!({ "type": "text", "text": text })
 }
 
 fn cache_control_block() -> Value {

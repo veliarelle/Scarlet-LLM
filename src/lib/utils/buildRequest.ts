@@ -122,6 +122,11 @@ function messageToChatMessage(m: Message): ChatMessage {
   for (const att of atts) {
     if (att.mimeType.startsWith("image/")) {
       parts.push({ type: "image_url", image_url: { url: `data:${att.mimeType};base64,${att.data}` } });
+    } else if (att.text?.trim()) {
+      parts.push({
+        type: "text",
+        text: `[Attached file: ${att.name}, ${att.mimeType}]\n\n${att.text.trim()}`,
+      });
     } else {
       parts.push({ type: "file", source: { type: "base64", media_type: att.mimeType, data: att.data }, name: att.name });
     }

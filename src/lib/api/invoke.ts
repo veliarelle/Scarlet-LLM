@@ -8,6 +8,7 @@ import type {
   CompletionResponse,
   ImageGenInput,
   ImageGenResponse,
+  Attachment,
   Model,
   NewChatInput,
   SendCompletionInput,
@@ -52,6 +53,10 @@ export const api = {
     invoke<ImageGenResponse>("generate_image", { input }),
   saveImage: (dataUrl: string, defaultName: string, title?: string) =>
     invoke<boolean>("save_image", { dataUrl, defaultName, title }),
+  prepareAttachments: (files: { name: string; mimeType: string; data: string }[]) =>
+    invoke<Attachment[]>("prepare_attachments", { files }),
+  readDroppedFiles: (paths: string[]) =>
+    invoke<Attachment[]>("read_dropped_files", { paths }),
 
   listChats: () => invoke<ChatMeta[]>("list_chats"),
   loadChat: (id: string) => invoke<Chat>("load_chat", { id }),

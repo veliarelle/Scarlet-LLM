@@ -1,3 +1,4 @@
+use crate::commands::attachments::extract_text_from_base64;
 use crate::providers::{join_url, CompletionRequest, Provider, StreamCallback};
 use crate::types::{CompletionResponse, Model, TokenUsage, ToolCall};
 use async_trait::async_trait;
@@ -102,6 +103,90 @@ struct StreamDelta {
     content: Option<String>,
 }
 
+fn normalize_file_part(part: &Value) -> Value {
+    if let Some(file) = part.get("file") {
+        let name = file
+            .get("filename")
+            .and_then(Value::as_str)
+            .unwrap_or("attachment");
+        let file_data = file.get("file_data").and_then(Value::as_str).unwrap_or("");
+        if file_data_mime(file_data) == Some("application/pdf") {
+            return part.clone();
+        }
+        return file_data_as_text(name, file_data);
+    }
+    let Some(source) = part.get("source") else {
+        return part.clone();
+    };
+    let Some(media_type) = source.get("media_type").and_then(Value::as_str) else {
+        return part.clone();
+    };
+    let Some(data) = source.get("data").and_then(Value::as_str) else {
+        return part.clone();
+    };
+    let name = part.get("name").and_then(Value::as_str).unwrap_or("attachment");
+    if media_type == "application/pdf" {
+        let mut file = serde_json::Map::new();
+        if !name.is_empty() {
+            file.insert("filename".into(), Value::String(name.to_string()));
+        }
+        file.insert(
+            "file_data".into(),
+            Value::String(format!("data:{media_type};base64,{data}")),
+        );
+        return json!({
+            "type": "file",
+            "file": Value::Object(file),
+        });
+    }
+    file_part_as_text(name, media_type, data)
+}
+
+fn file_data_mime(file_data: &str) -> Option<&str> {
+    file_data
+        .strip_prefix("data:")
+        .and_then(|rest| rest.split_once(";base64,"))
+        .map(|(mime, _)| mime)
+}
+
+fn file_data_as_text(name: &str, file_data: &str) -> Value {
+    let (media_type, data) = file_data
+        .strip_prefix("data:")
+        .and_then(|rest| rest.split_once(";base64,"))
+        .unwrap_or(("application/octet-stream", file_data));
+    file_part_as_text(name, media_type, data)
+}
+
+fn file_part_as_text(name: &str, media_type: &str, data: &str) -> Value {
+    let text = extract_text_from_base64(name, media_type, data)
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| format!("[Attached file: {name}, {media_type}]\n\n{s}"))
+        .unwrap_or_else(|| {
+            format!(
+                "[Attached file: {name}, {media_type}]\n\nThis provider only accepts text/image/video message parts through OpenRouter, so this file was not sent as a binary document."
+            )
+        });
+    json!({ "type": "text", "text": text })
+}
+
+fn normalize_openai_content(content: &Value) -> Value {
+    match content {
+        Value::Array(parts) => Value::Array(
+            parts
+                .iter()
+                .map(|part| {
+                    if part.get("type").and_then(Value::as_str) == Some("file") {
+                        normalize_file_part(part)
+                    } else {
+                        part.clone()
+                    }
+                })
+                .collect(),
+        ),
+        other => other.clone(),
+    }
+}
+
 fn build_body(req: &CompletionRequest, stream: bool) -> serde_json::Map<String, Value> {
     let messages: Vec<Value> = req
         .messages
@@ -115,7 +200,7 @@ fn build_body(req: &CompletionRequest, stream: bool) -> serde_json::Map<String, 
             };
             let mut msg = serde_json::Map::new();
             msg.insert("role".into(), Value::String(role.to_string()));
-            msg.insert("content".into(), m.content.clone());
+            msg.insert("content".into(), normalize_openai_content(&m.content));
             if let Some(name) = m.name.as_ref() {
                 msg.insert("name".into(), Value::String(name.clone()));
             }

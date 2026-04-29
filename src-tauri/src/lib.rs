@@ -71,6 +71,8 @@ pub fn run() {
             commands::llm::execute_tool,
             commands::llm::generate_image,
             commands::llm::save_image,
+            commands::attachments::prepare_attachments,
+            commands::attachments::read_dropped_files,
             commands::chats::list_chats,
             commands::chats::load_chat,
             commands::chats::save_chat,

@@ -1,3 +1,4 @@
+use crate::commands::attachments::extract_text_from_base64;
 use crate::providers::{CompletionRequest, Provider, StreamCallback, StreamItem};
 use crate::types::{CompletionResponse, Model, Role, TokenUsage, ToolCall};
 use async_trait::async_trait;
@@ -104,7 +105,15 @@ fn to_google_parts(content: &Value) -> Vec<Value> {
                         let src = part.get("source")?;
                         let mime = src.get("media_type")?.as_str()?;
                         let data = src.get("data")?.as_str()?;
-                        Some(json!({ "inlineData": { "mimeType": mime, "data": data } }))
+                        let name = part
+                            .get("name")
+                            .and_then(Value::as_str)
+                            .unwrap_or("attachment");
+                        if extract_text_from_base64(name, mime, data).is_some() {
+                            Some(file_part_as_text(name, mime, data))
+                        } else {
+                            Some(json!({ "inlineData": { "mimeType": mime, "data": data } }))
+                        }
                     }
                     _ => None,
                 }
@@ -112,6 +121,14 @@ fn to_google_parts(content: &Value) -> Vec<Value> {
             .collect(),
         _ => vec![],
     }
+}
+
+fn file_part_as_text(name: &str, media_type: &str, data: &str) -> Value {
+    let text = extract_text_from_base64(name, media_type, data)
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| format!("[Attached file: {name}, {media_type}]\n\n{s}"))
+        .unwrap_or_else(|| format!("[Attached file: {name}, {media_type}]"));
+    json!({ "text": text })
 }
 
 fn build_body(req: &CompletionRequest) -> Value {

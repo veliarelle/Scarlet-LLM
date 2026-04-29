@@ -1,3 +1,4 @@
+use crate::commands::attachments::extract_text_from_base64;
 use crate::providers::{join_url, CompletionRequest, Provider, StreamCallback, StreamItem};
 use crate::types::{CompletionResponse, Model, Role, TokenUsage, ToolCall};
 use async_trait::async_trait;
@@ -117,6 +118,88 @@ fn prompt_cache_key(model: &str) -> String {
     format!("scarlet-llm-{model}")
 }
 
+fn file_part_as_text(name: &str, media_type: &str, data: &str) -> Value {
+    let text = extract_text_from_base64(name, media_type, data)
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| format!("[Attached file: {name}, {media_type}]\n\n{s}"))
+        .unwrap_or_else(|| {
+            format!(
+                "[Attached file: {name}, {media_type}]\n\nThis file type cannot be sent as an inline document to the OpenAI Responses API. Convert it to text or PDF if the model needs its contents."
+            )
+        });
+    json!({ "type": "input_text", "text": text })
+}
+
+fn responses_file_part(part: &Value) -> Value {
+    if let Some(file) = part.get("file") {
+        let name = file
+            .get("filename")
+            .and_then(Value::as_str)
+            .unwrap_or("attachment");
+        let file_data = file.get("file_data").and_then(Value::as_str).unwrap_or("");
+        if let Some((media_type, data)) = file_data
+            .strip_prefix("data:")
+            .and_then(|rest| rest.split_once(";base64,"))
+        {
+            if media_type != "application/pdf" {
+                return file_part_as_text(name, media_type, data);
+            }
+        }
+        return json!({
+            "type": "input_file",
+            "filename": name,
+            "file_data": file_data,
+        });
+    }
+
+    let Some(source) = part.get("source") else {
+        return part.clone();
+    };
+    let Some(media_type) = source.get("media_type").and_then(Value::as_str) else {
+        return part.clone();
+    };
+    let Some(data) = source.get("data").and_then(Value::as_str) else {
+        return part.clone();
+    };
+    let name = part.get("name").and_then(Value::as_str).unwrap_or("attachment");
+    if media_type != "application/pdf" {
+        return file_part_as_text(name, media_type, data);
+    }
+    json!({
+        "type": "input_file",
+        "filename": name,
+        "file_data": format!("data:{media_type};base64,{data}"),
+    })
+}
+
+fn to_responses_content(content: &Value) -> Value {
+    match content {
+        Value::Array(parts) => Value::Array(
+            parts
+                .iter()
+                .map(|part| match part.get("type").and_then(Value::as_str) {
+                    Some("text") => json!({
+                        "type": "input_text",
+                        "text": part.get("text").cloned().unwrap_or(Value::String(String::new())),
+                    }),
+                    Some("image_url") => json!({
+                        "type": "input_image",
+                        "image_url": part
+                            .get("image_url")
+                            .and_then(|v| v.get("url"))
+                            .cloned()
+                            .unwrap_or(Value::String(String::new())),
+                    }),
+                    Some("file") => responses_file_part(part),
+                    Some("input_text" | "input_image" | "input_file") => part.clone(),
+                    _ => part.clone(),
+                })
+                .collect(),
+        ),
+        other => other.clone(),
+    }
+}
+
 fn build_body(
     req: &CompletionRequest,
     stream: bool,
@@ -137,11 +220,11 @@ fn build_body(
                 }
             }
             Role::User => {
-                input.push(json!({ "role": "user", "content": msg.content }));
+                input.push(json!({ "role": "user", "content": to_responses_content(&msg.content) }));
             }
             Role::Assistant => {
                 if !msg.content.as_str().unwrap_or_default().is_empty() {
-                    input.push(json!({ "role": "assistant", "content": msg.content }));
+                    input.push(json!({ "role": "assistant", "content": to_responses_content(&msg.content) }));
                 }
                 for call in &msg.tool_calls {
                     input.push(json!({

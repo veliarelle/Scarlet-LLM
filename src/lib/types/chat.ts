@@ -10,6 +10,7 @@ export interface Attachment {
   name: string;
   mimeType: string;
   data: string; // base64, no "data:" prefix
+  text?: string | null;
 }
 
 // Сетевой формат сообщения (что отправляем в LLM):

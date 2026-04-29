@@ -12,9 +12,10 @@
     FileText,
     Bookmark,
   } from "lucide-svelte";
-  import type { Message } from "$lib/types/chat";
+  import type { Attachment, Message } from "$lib/types/chat";
   import { tr } from "$lib/i18n";
   import { settings } from "$lib/stores/settings";
+  import { sidebarOpen } from "$lib/stores/ui";
   import Markdown from "$lib/components/common/Markdown.svelte";
   import { api } from "$lib/api/invoke";
   import { estimateStoredMessageTokens } from "$lib/utils/buildRequest";
@@ -60,6 +61,17 @@
   let deleteChoiceOpen = $state(false);
   let editAreaEl: HTMLTextAreaElement | undefined = $state();
   let touchStartX: number | null = null;
+  let viewerOpen = $state(false);
+  let viewerSrc = $state("");
+  let viewerAlt = $state("");
+  let viewerScale = $state(1);
+  let viewerX = $state(0);
+  let viewerY = $state(0);
+  let viewerDragging = $state(false);
+  let viewerDragX = 0;
+  let viewerDragY = 0;
+  let viewerStartX = 0;
+  let viewerStartY = 0;
 
   $effect(() => {
     if (editing && editAreaEl) {
@@ -114,6 +126,13 @@
     const m = displayImageUrl.match(/^data:image\/([a-zA-Z0-9+]+);/);
     if (m) ext = m[1].replace("jpeg", "jpg");
     await api.saveImage(displayImageUrl, `scarlet-${Date.now()}.${ext}`, $tr("message.saveImageTitle"));
+  }
+
+  async function downloadAttachmentImage(att: Attachment) {
+    const dataUrl = `data:${att.mimeType};base64,${att.data}`;
+    const fallbackExt = att.mimeType.split("/")[1]?.replace("jpeg", "jpg") || "png";
+    const name = /\.[A-Za-z0-9]+$/.test(att.name) ? att.name : `${att.name || "scarlet-image"}.${fallbackExt}`;
+    await api.saveImage(dataUrl, name, $tr("message.saveImageTitle"));
   }
 
   function copy() {
@@ -185,6 +204,65 @@
     deleteChoiceOpen = false;
     onDeleteGroup?.();
   }
+
+  function openImageViewer(src: string, alt: string) {
+    viewerSrc = src;
+    viewerAlt = alt;
+    viewerScale = 1;
+    viewerX = 0;
+    viewerY = 0;
+    viewerDragging = false;
+    viewerOpen = true;
+  }
+
+  function closeImageViewer() {
+    viewerOpen = false;
+    viewerDragging = false;
+  }
+
+  function onViewerWheel(e: WheelEvent) {
+    e.preventDefault();
+    const oldScale = viewerScale;
+    const nextScale = Math.min(8, Math.max(0.35, oldScale * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
+    const backdrop = (e.currentTarget as HTMLElement).closest(".image-viewer-backdrop");
+    const rect = backdrop?.getBoundingClientRect() ?? (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const pointerX = e.clientX - rect.left - rect.width / 2;
+    const pointerY = e.clientY - rect.top - rect.height / 2;
+    const ratio = nextScale / oldScale;
+    viewerX = pointerX - (pointerX - viewerX) * ratio;
+    viewerY = pointerY - (pointerY - viewerY) * ratio;
+    viewerScale = nextScale;
+  }
+
+  function onViewerPointerDown(e: PointerEvent) {
+    e.preventDefault();
+    viewerDragging = true;
+    viewerDragX = e.clientX;
+    viewerDragY = e.clientY;
+    viewerStartX = viewerX;
+    viewerStartY = viewerY;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  function onViewerPointerMove(e: PointerEvent) {
+    if (!viewerDragging) return;
+    viewerX = viewerStartX + e.clientX - viewerDragX;
+    viewerY = viewerStartY + e.clientY - viewerDragY;
+  }
+
+  function onViewerPointerUp(e: PointerEvent) {
+    viewerDragging = false;
+    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+  }
+
+  function onViewerBackdropClick(e: MouseEvent) {
+    if ((e.target as HTMLElement).closest(".image-viewer-frame")) return;
+    closeImageViewer();
+  }
+
+  function onViewerKey(e: KeyboardEvent) {
+    if (e.key === "Escape") closeImageViewer();
+  }
 </script>
 
 <div
@@ -231,13 +309,24 @@
       </div>
     {:else if displayImageUrl}
       <div class="img-wrap">
-        <img
-          src={displayImageUrl}
-          alt={msg.content || $tr("message.generatedImage")}
-          class="generated-img"
-          loading="lazy"
-        />
-        <button class="img-download" title={$tr("message.download")} onclick={downloadImage}>
+        <button
+          type="button"
+          class="img-open"
+          onclick={() => openImageViewer(displayImageUrl, msg.content || $tr("message.generatedImage"))}
+          aria-label={msg.content || $tr("message.generatedImage")}
+        >
+          <img
+            src={displayImageUrl}
+            alt={msg.content || $tr("message.generatedImage")}
+            class="generated-img"
+            loading="lazy"
+            draggable="false"
+          />
+        </button>
+        <button class="img-download" title={$tr("message.download")} onclick={(e) => {
+          e.stopPropagation();
+          downloadImage();
+        }}>
           <Download size={14} />
         </button>
       </div>
@@ -249,11 +338,27 @@
         <div class="att-preview">
           {#each msg.attachments as att (att.id)}
             {#if att.mimeType.startsWith("image/")}
-              <img
-                src={`data:${att.mimeType};base64,${att.data}`}
-                alt={att.name}
-                class="att-img"
-              />
+              <div class="att-img-wrap">
+                <button
+                  type="button"
+                  class="att-img-open"
+                  onclick={() => openImageViewer(`data:${att.mimeType};base64,${att.data}`, att.name)}
+                  aria-label={att.name}
+                >
+                  <img
+                    src={`data:${att.mimeType};base64,${att.data}`}
+                    alt={att.name}
+                    class="att-img"
+                    draggable="false"
+                  />
+                </button>
+                <button class="img-download" title={$tr("message.download")} onclick={(e) => {
+                  e.stopPropagation();
+                  downloadAttachmentImage(att);
+                }}>
+                  <Download size={14} />
+                </button>
+              </div>
             {:else}
               <div class="att-file">
                 <FileText size={14} />
@@ -337,6 +442,42 @@
     {/if}
   </div>
 </div>
+
+{#if viewerOpen}
+  <div
+    class="image-viewer-backdrop"
+    class:sidebar-visible={$sidebarOpen}
+    onclick={onViewerBackdropClick}
+    onkeydown={onViewerKey}
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+  >
+    <div
+      class="image-viewer-stage"
+      class:dragging={viewerDragging}
+      role="presentation"
+    >
+      <div
+        class="image-viewer-frame"
+        style={`transform: translate3d(${viewerX}px, ${viewerY}px, 0) scale(${viewerScale});`}
+        onwheel={onViewerWheel}
+        onpointerdown={onViewerPointerDown}
+        onpointermove={onViewerPointerMove}
+        onpointerup={onViewerPointerUp}
+        onpointercancel={onViewerPointerUp}
+        role="presentation"
+      >
+        <img
+          src={viewerSrc}
+          alt={viewerAlt}
+          class="image-viewer-img"
+          draggable="false"
+        />
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .msg-group {
@@ -448,8 +589,20 @@
   .att-preview {
     display: flex;
     flex-direction: column;
+    align-items: flex-start;
     gap: 6px;
     margin-bottom: 6px;
+  }
+  .att-img-open,
+  .img-open {
+    display: block;
+    max-width: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    text-align: inherit;
   }
   .att-img {
     max-width: 260px;
@@ -457,6 +610,12 @@
     border-radius: 8px;
     object-fit: cover;
     display: block;
+    cursor: zoom-in;
+  }
+  .att-img-wrap {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
   }
   .att-file {
     display: flex;
@@ -477,10 +636,14 @@
     display: inline-block;
     max-width: 100%;
   }
+  .img-open {
+    display: inline-block;
+  }
   .generated-img {
     max-width: 100%;
     border-radius: 8px;
     display: block;
+    cursor: zoom-in;
   }
   .img-download {
     position: absolute;
@@ -500,7 +663,8 @@
     transition: opacity 0.15s, background 0.15s;
     backdrop-filter: blur(6px);
   }
-  .img-wrap:hover .img-download {
+  .img-wrap:hover .img-download,
+  .att-img-wrap:hover .img-download {
     opacity: 1;
   }
   .img-download:hover {
@@ -511,6 +675,63 @@
     color: var(--text-3);
     margin-top: 6px;
     font-style: italic;
+  }
+
+  .image-viewer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 28px;
+    background: oklch(0% 0 0 / 0.78);
+    backdrop-filter: blur(8px);
+  }
+  @media (min-width: 768px) {
+    .image-viewer-backdrop.sidebar-visible {
+      left: 256px;
+    }
+  }
+  .image-viewer-stage {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: none;
+    user-select: none;
+  }
+  .image-viewer-frame {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    max-width: min(92%, 1400px);
+    max-height: 92%;
+    padding: 8px;
+    border: 1px solid color-mix(in srgb, var(--border) 68%, white 18%);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--bg) 36%, transparent);
+    box-shadow:
+      0 0 0 1px oklch(100% 0 0 / 0.08),
+      0 24px 80px oklch(0% 0 0 / 0.55);
+    cursor: grab;
+    transform-origin: center center;
+    will-change: transform;
+    touch-action: none;
+  }
+  .image-viewer-stage.dragging .image-viewer-frame {
+    cursor: grabbing;
+  }
+  .image-viewer-img {
+    max-width: 100%;
+    max-height: calc((100vh / var(--app-scale, 1)) * 0.86);
+    width: auto;
+    height: auto;
+    display: block;
+    border-radius: 6px;
+    pointer-events: none;
   }
 
   .typing {
