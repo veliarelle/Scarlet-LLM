@@ -40,6 +40,7 @@
     "text-2": "#aea49f",
     "text-3": "#6b5e58",
     danger: "#d04444",
+    highlight: "#e5c94a",
   };
   const LIGHT_HEX: Record<ColorVar, string> = {
     bg: "#f5efed",
@@ -54,6 +55,7 @@
     "text-2": "#52443f",
     "text-3": "#7d6e69",
     danger: "#b03039",
+    highlight: "#e5c94a",
   };
 
   async function setTheme(v: Theme) {
@@ -145,6 +147,7 @@
     "text-2": $tr("appearance.textSecond"),
     "text-3": $tr("appearance.placeholderText"),
     danger: $tr("appearance.danger"),
+    highlight: $tr("appearance.highlight"),
   });
 </script>
 

@@ -1,5 +1,5 @@
 use crate::storage::{chats_dir, json_store};
-use crate::types::{Chat, ChatMeta, Message, Role};
+use crate::types::{Chat, ChatMeta, Message};
 use chrono::Utc;
 use serde::Deserialize;
 use std::path::PathBuf;
@@ -84,6 +84,8 @@ pub fn create_chat(app: AppHandle, input: NewChatInput) -> Result<Chat, String> 
         model: input.model,
         proxy_id: input.proxy_id,
         summary: None,
+        active_leaf_id: None,
+        bookmarks: Vec::new(),
         messages: Vec::new(),
     };
     let path = chat_path(&app, &chat.id)?;
@@ -132,20 +134,35 @@ pub fn pin_chat(app: AppHandle, id: String, pinned: bool) -> Result<ChatMeta, St
     })
 }
 
+fn message_path<'a>(messages: &'a [Message], message_id: &str) -> Option<Vec<&'a Message>> {
+    let mut path = Vec::new();
+    let mut current_id = Some(message_id.to_string());
+    let mut guard = 0usize;
+    while let Some(id) = current_id {
+        if guard > messages.len() {
+            return None;
+        }
+        guard += 1;
+        let message = messages.iter().find(|m| m.id == id)?;
+        current_id = message.parent_id.clone();
+        path.push(message);
+    }
+    path.reverse();
+    Some(path)
+}
+
 #[tauri::command]
 pub fn fork_chat(app: AppHandle, id: String, until_message_id: String) -> Result<Chat, String> {
     let src: Chat = json_store::read(&chat_path(&app, &id)?)?;
-    let idx = src
-        .messages
-        .iter()
-        .position(|m| m.id == until_message_id)
+    let path = message_path(&src.messages, &until_message_id)
         .ok_or_else(|| format!("message {until_message_id} not found"))?;
     let now = Utc::now();
+    let new_ids: Vec<String> = path.iter().map(|_| Uuid::new_v4().to_string()).collect();
     let mut new_messages: Vec<Message> = Vec::new();
     let summary_after_message_id = src.summary.as_ref().map(|s| s.after_message_id.clone());
     let mut new_summary_after_message_id: Option<String> = None;
-    for m in src.messages.iter().take(idx + 1) {
-        let new_id = Uuid::new_v4().to_string();
+    for (idx, m) in path.iter().enumerate() {
+        let new_id = new_ids[idx].clone();
         if summary_after_message_id.as_ref() == Some(&m.id) {
             new_summary_after_message_id = Some(new_id.clone());
         }
@@ -154,12 +171,16 @@ pub fn fork_chat(app: AppHandle, id: String, until_message_id: String) -> Result
             role: m.role.clone(),
             content: m.content.clone(),
             created_at: m.created_at,
+            parent_id: idx.checked_sub(1).map(|parent_idx| new_ids[parent_idx].clone()),
+            child_ids: new_ids.get(idx + 1).map(|id| vec![id.clone()]).unwrap_or_default(),
+            active_child_id: new_ids.get(idx + 1).cloned(),
             model: m.model.clone(),
             variations: m.variations.clone(),
             variation_index: m.variation_index,
             variation_meta: m.variation_meta.clone(),
             image_url: m.image_url.clone(),
             attachments: m.attachments.clone(),
+            bookmarked: m.bookmarked,
         });
     }
     let summary = src.summary.and_then(|mut s| {
@@ -170,7 +191,6 @@ pub fn fork_chat(app: AppHandle, id: String, until_message_id: String) -> Result
             None
         }
     });
-    let _ = Role::System; // suppress unused if branches change
     let new_chat = Chat {
         id: Uuid::new_v4().to_string(),
         title: format!("⑂ {}", src.title),
@@ -180,6 +200,8 @@ pub fn fork_chat(app: AppHandle, id: String, until_message_id: String) -> Result
         model: src.model,
         proxy_id: src.proxy_id,
         summary,
+        active_leaf_id: new_messages.last().map(|m| m.id.clone()),
+        bookmarks: Vec::new(),
         messages: new_messages,
     };
     json_store::write_atomic(&chat_path(&app, &new_chat.id)?, &new_chat)?;

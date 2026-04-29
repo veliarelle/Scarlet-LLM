@@ -48,6 +48,7 @@ Install Java/Android tooling only if you need Android builds.
 
 For Android: Install the apk from releases.
 For Linux: Install the appimage/.deb/bin from releases, depending on your Linux distributive.
+For Windows: The releases for Windows can be delayed, but if available - then download from releases.
 
 To compile the app yourself, follow the Development section.
 

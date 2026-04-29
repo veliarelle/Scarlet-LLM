@@ -10,7 +10,7 @@
     ChevronRight,
     Download,
     FileText,
-    Image as ImageIcon,
+    Bookmark,
   } from "lucide-svelte";
   import type { Message } from "$lib/types/chat";
   import { tr } from "$lib/i18n";
@@ -21,24 +21,34 @@
 
   let {
     msg,
-    isLast = false,
     onEdit,
     onDelete,
     onRewind,
     onFork,
-    onPrevVariation,
-    onNextVariation,
+    onPrevBranch,
+    onNextBranch,
     onRegenerate,
+    onSendEdit,
+    onToggleBookmark,
+    branchIndex = 0,
+    branchCount = 1,
+    branchLocked = false,
+    highlighted = false,
   }: {
     msg: Message;
-    isLast?: boolean;
     onEdit?: (content: string) => void;
     onDelete?: () => void;
     onRewind?: () => void;
     onFork?: () => void;
-    onPrevVariation?: () => void;
-    onNextVariation?: () => void;
+    onPrevBranch?: () => void;
+    onNextBranch?: () => void;
     onRegenerate?: () => void;
+    onSendEdit?: (content: string) => void;
+    onToggleBookmark?: () => void;
+    branchIndex?: number;
+    branchCount?: number;
+    branchLocked?: boolean;
+    highlighted?: boolean;
   } = $props();
 
   let hovered = $state(false);
@@ -65,18 +75,13 @@
   const isAssistant = $derived(msg.role === "assistant");
   const isEmptyAssistant = $derived(isAssistant && msg.content === "");
 
-  const variations = $derived(msg.variations ?? []);
-  const varIdx = $derived(msg.variation_index ?? 0);
-  const varCount = $derived(variations.length);
-  const atFirstVar = $derived(varIdx === 0);
-  const atLastVar = $derived(varIdx === Math.max(0, varCount - 1));
-
-  // Per-variation metadata: fall back to message-level fields for old chats without it
-  const currentMeta = $derived((msg.variation_meta ?? [])[varIdx]);
-  const displayModel = $derived(currentMeta?.model ?? msg.model ?? null);
-  const displayTime = $derived(currentMeta?.created_at ?? msg.created_at);
-  // image_url per variation (falls back to message-level for old chats)
-  const displayImageUrl = $derived(currentMeta?.image_url ?? msg.image_url ?? null);
+  const branchIdx = $derived(Math.max(0, branchIndex));
+  const branchTotal = $derived(Math.max(1, branchCount));
+  const atFirstBranch = $derived(branchIdx === 0);
+  const atLastBranch = $derived(branchIdx >= branchTotal - 1);
+  const displayModel = $derived(msg.model ?? null);
+  const displayTime = $derived(msg.created_at);
+  const displayImageUrl = $derived(msg.image_url ?? null);
   const tokenCount = $derived(estimateStoredMessageTokens(msg));
 
   function fmtTime(iso: string): string {
@@ -120,6 +125,11 @@
     editing = false;
   }
 
+  function sendEdit() {
+    if (editVal.trim()) onSendEdit?.(editVal.trim());
+    editing = false;
+  }
+
   function onEditKey(e: KeyboardEvent) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -130,24 +140,25 @@
   }
 
   function onTouchStart(e: TouchEvent) {
+    if (branchLocked) return;
     touchStartX = e.touches[0].clientX;
   }
   function onTouchEnd(e: TouchEvent) {
-    if (touchStartX === null || !isAssistant || !isLast) return;
+    if (branchLocked || touchStartX === null) return;
     const diff = e.changedTouches[0].clientX - touchStartX;
     if (diff < -50) {
-      // свайп влево — следующий вариант или генерация нового
-      if (atLastVar) onRegenerate?.();
-      else onNextVariation?.();
-    } else if (diff > 50 && !atFirstVar) {
-      onPrevVariation?.();
+      if (isAssistant && atLastBranch) onRegenerate?.();
+      else if (!atLastBranch) onNextBranch?.();
+    } else if (diff > 50 && !atFirstBranch) {
+      onPrevBranch?.();
     }
     touchStartX = null;
   }
 
   function clickNext() {
-    if (atLastVar) onRegenerate?.();
-    else onNextVariation?.();
+    if (branchLocked) return;
+    if (isAssistant && atLastBranch) onRegenerate?.();
+    else onNextBranch?.();
   }
 </script>
 
@@ -161,7 +172,7 @@
   ontouchend={onTouchEnd}
   role="group"
 >
-  <div class="message" class:user={isUser} class:assistant={isAssistant} class:editing>
+  <div class="message" class:user={isUser} class:assistant={isAssistant} class:editing class:highlighted>
     <div class="role-row">
       <span class="role">{isUser ? $settings.user_name || $tr("message.userFallback") : $settings.assistant_name || "Scarlet"}</span>
       {#if isAssistant && displayModel}
@@ -182,7 +193,10 @@
           bind:this={editAreaEl}
         ></textarea>
         <div class="edit-actions">
-          <button class="btn-sm accent" onclick={saveEdit}>{$tr("common.save")}</button>
+          {#if isUser && onSendEdit}
+            <button class="btn-sm send" onclick={sendEdit}>{$tr("message.sendEdit")}</button>
+          {/if}
+          <button class="btn-sm save" onclick={saveEdit}>{$tr("common.save")}</button>
           <button class="btn-sm" onclick={() => (editing = false)}>{$tr("common.cancel")}</button>
         </div>
       </div>
@@ -241,6 +255,14 @@
               <Copy size={13} />
             {/if}
           </button>
+          <button
+            class="tb-btn"
+            class:active={msg.bookmarked}
+            title={$tr("message.bookmark")}
+            onclick={() => onToggleBookmark?.()}
+          >
+            <Bookmark size={13} fill={msg.bookmarked ? "currentColor" : "none"} />
+          </button>
           <button class="tb-btn" title={$tr("common.edit")} onclick={startEdit}>
             <Pencil size={13} />
           </button>
@@ -255,22 +277,23 @@
           </button>
         </div>
 
-        {#if isAssistant && isLast}
+        {#if branchTotal > 1 || isAssistant}
           <div class="toolbar-right">
-            {#if varCount > 1}
+            {#if branchTotal > 1}
               <button
                 class="tb-btn"
-                disabled={atFirstVar}
+                disabled={branchLocked || atFirstBranch}
                 title={$tr("message.prevVariant")}
-                onclick={() => onPrevVariation?.()}
+                onclick={() => onPrevBranch?.()}
               >
                 <ChevronLeft size={13} />
               </button>
-              <span class="var-count">{varIdx + 1}/{varCount}</span>
+              <span class="var-count">{branchIdx + 1}/{branchTotal}</span>
             {/if}
             <button
               class="tb-btn"
-              title={atLastVar ? $tr("message.regenerateVariant") : $tr("message.nextVariant")}
+              disabled={branchLocked || (!isAssistant && atLastBranch)}
+              title={isAssistant && atLastBranch ? $tr("message.regenerateVariant") : $tr("message.nextVariant")}
               onclick={clickNext}
             >
               <ChevronRight size={13} />
@@ -304,6 +327,11 @@
     border-radius: 14px;
     background: var(--bg-3);
     animation: msgIn 0.18s ease;
+    transition: box-shadow 0.18s ease, background 0.18s ease;
+  }
+  .message.highlighted {
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--highlight) 58%, transparent),
+      0 0 22px color-mix(in srgb, var(--highlight) 22%, transparent);
   }
   .message.user {
     background: var(--user-msg);
@@ -528,12 +556,47 @@
     background: var(--border);
     color: var(--text);
   }
-  .btn-sm.accent {
-    background: var(--accent);
+  .btn-sm.save {
+    background: var(--accent-d);
+    color: white;
+    border: 1px solid color-mix(in srgb, var(--accent-d) 70%, white);
+  }
+  .btn-sm.save:hover {
+    background: color-mix(in srgb, var(--accent-d) 82%, white);
     color: white;
   }
-  .btn-sm.accent:hover {
-    background: var(--accent-h);
+  .btn-sm.send {
+    background: var(--accent-d);
+    color: white;
+    border: 1px solid color-mix(in srgb, var(--accent-d) 70%, white);
+  }
+  .btn-sm.send:hover {
+    background: color-mix(in srgb, var(--accent-d) 82%, white);
+    color: white;
+  }
+  .message.user .btn-sm {
+    background: rgba(0, 0, 0, 0.22);
+    color: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+  }
+  .message.user .btn-sm:hover {
+    background: rgba(0, 0, 0, 0.34);
+    color: white;
+  }
+  .message.user .btn-sm.save {
+    background: var(--accent-d);
+    color: white;
+    border-color: color-mix(in srgb, var(--accent-d) 70%, white);
+  }
+  .message.user .btn-sm.send {
+    background: var(--accent-d);
+    color: white;
+    border-color: color-mix(in srgb, var(--accent-d) 70%, white);
+  }
+  .message.user .btn-sm.save:hover,
+  .message.user .btn-sm.send:hover {
+    background: color-mix(in srgb, var(--accent-d) 82%, white);
+    color: white;
   }
 
   /* Toolbar внутри bubble — прибит ниже под её нижним краем,
@@ -584,6 +647,9 @@
   .tb-btn:hover:not(:disabled) {
     background: var(--bg-4);
     color: var(--text);
+  }
+  .tb-btn.active {
+    color: var(--accent);
   }
   .tb-btn:disabled {
     opacity: 0.3;

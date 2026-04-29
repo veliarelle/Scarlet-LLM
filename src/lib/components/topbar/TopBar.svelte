@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { Menu, Ghost, ImagePlus } from "lucide-svelte";
+  import { Bookmark, Menu, Ghost, ImagePlus } from "lucide-svelte";
   import { tr } from "$lib/i18n";
-  import { sidebarOpen, incognito, imageMode } from "$lib/stores/ui";
+  import { bookmarksPanelOpen, sidebarOpen, incognito, imageMode } from "$lib/stores/ui";
   import { activeChat } from "$lib/stores/chats";
   import ModelSelector from "./ModelSelector.svelte";
   import ProxyIndicator from "./ProxyIndicator.svelte";
@@ -10,10 +10,16 @@
   const canToggleIncognito = $derived(
     !$activeChat || $activeChat.id.startsWith("incognito-")
   );
+  const hasBookmarks = $derived(($activeChat?.bookmarks ?? []).length > 0);
 
   function toggleIncognito() {
     if (!canToggleIncognito) return;
     incognito.update((v) => !v);
+  }
+
+  function toggleBookmarks() {
+    if (!hasBookmarks) return;
+    bookmarksPanelOpen.update((v) => !v);
   }
 </script>
 
@@ -26,21 +32,21 @@
     <Menu size={18} />
   </button>
 
+  <button
+    class="icon-btn desktop-only"
+    title={$tr("topbar.showHideSidebar")}
+    onclick={() => sidebarOpen.update((v) => !v)}
+    aria-label={$tr("topbar.showHideSidebar")}
+  >
+    <Menu size={18} />
+  </button>
+
   <div class="mid">
     <ModelSelector />
     <ProxyIndicator />
   </div>
 
   <div class="right">
-    <button
-      class="icon-btn desktop-only"
-      title={$tr("topbar.showHideSidebar")}
-      onclick={() => sidebarOpen.update((v) => !v)}
-      aria-label={$tr("topbar.showHideSidebar")}
-    >
-      <Menu size={18} />
-    </button>
-
     <button
       class="icon-btn"
       class:active={$imageMode}
@@ -49,6 +55,25 @@
       aria-label={$tr("topbar.imageMode")}
     >
       <ImagePlus size={18} />
+    </button>
+
+    <button
+      class="icon-btn bookmark"
+      class:active={hasBookmarks && $bookmarksPanelOpen}
+      class:disabled={!hasBookmarks}
+      title={!hasBookmarks
+        ? $tr("topbar.bookmarksEmpty")
+        : $bookmarksPanelOpen
+          ? $tr("topbar.bookmarksHide")
+          : $tr("topbar.bookmarksShow")}
+      onclick={toggleBookmarks}
+      aria-label={$tr("topbar.bookmarks")}
+      aria-disabled={!hasBookmarks}
+    >
+      <Bookmark size={18} fill={hasBookmarks && $bookmarksPanelOpen ? "currentColor" : "none"} />
+      {#if !hasBookmarks}
+        <span class="strike" aria-hidden="true"></span>
+      {/if}
     </button>
 
     <button
@@ -85,7 +110,7 @@
     backdrop-filter: blur(var(--topbar-blur, 0px));
     -webkit-backdrop-filter: blur(var(--topbar-blur, 0px));
     position: relative;
-    z-index: 2;
+    z-index: 20;
   }
   .mid {
     display: flex;

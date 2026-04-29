@@ -13,10 +13,12 @@ export interface ReasoningConfig {
   send_effort: boolean;
 }
 
+export type PromptRole = Extract<Role, "system" | "user" | "assistant">;
+
 export interface Prompt {
   id: string;
   name: string;
-  role: Role;
+  role: PromptRole;
   content: string;
   enabled: boolean;
 }
@@ -76,6 +78,7 @@ export const COLOR_VARS = [
   "text-2",
   "text-3",
   "danger",
+  "highlight",
 ] as const;
 export type ColorVar = (typeof COLOR_VARS)[number];
 

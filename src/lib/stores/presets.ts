@@ -1,10 +1,18 @@
 import { get, writable } from "svelte/store";
 import { api } from "$lib/api/invoke";
 import type { PresetMeta } from "$lib/types/preset";
-import type { PresetUtilities, Prompt, PromptUtilities } from "$lib/types/settings";
+import type { PresetUtilities, Prompt, PromptRole, PromptUtilities } from "$lib/types/settings";
 import { settings } from "./settings";
 
 export const presetList = writable<PresetMeta[]>([]);
+
+function sanitizePromptRole(role: unknown): PromptRole {
+  return role === "user" || role === "assistant" || role === "system" ? role : "system";
+}
+
+function sanitizePrompts(prompts: Prompt[]): Prompt[] {
+  return prompts.map((prompt) => ({ ...prompt, role: sanitizePromptRole(prompt.role) }));
+}
 
 export async function refreshPresets() {
   const list = await api.listPresets();
@@ -15,7 +23,7 @@ export async function loadPresetIntoSettings(id: string) {
   const p = await api.loadPreset(id);
   const current = get(settings);
   await settings.patch({
-    prompts: p.prompts,
+    prompts: sanitizePrompts(p.prompts),
     utilities: {
       ...current.utilities,
       summarize_prompt_id: p.utilities?.summarize_prompt_id ?? null,
@@ -29,7 +37,7 @@ function presetUtilitiesFromSettings(utilities: PromptUtilities): PresetUtilitie
 }
 
 export async function savePresetFromCurrent(name: string, prompts: Prompt[], utilities: PromptUtilities) {
-  const p = await api.createPreset(name, prompts, presetUtilitiesFromSettings(utilities));
+  const p = await api.createPreset(name, sanitizePrompts(prompts), presetUtilitiesFromSettings(utilities));
   await settings.patch({ active_preset_id: p.id });
   await refreshPresets();
   return p;
@@ -53,7 +61,7 @@ export async function importPreset() {
 
 export async function overwritePreset(id: string, prompts: Prompt[], utilities: PromptUtilities) {
   const p = await api.loadPreset(id);
-  p.prompts = prompts;
+  p.prompts = sanitizePrompts(prompts);
   p.utilities = presetUtilitiesFromSettings(utilities);
   await api.savePreset(p);
   await refreshPresets();

@@ -4,6 +4,7 @@
   import { settings } from "$lib/stores/settings";
   import { models } from "$lib/stores/models";
   import { refreshList, selectChat } from "$lib/stores/chats";
+  import { COLOR_VARS } from "$lib/types/settings";
   import { applyBackground } from "$lib/utils/background";
   import Sidebar from "$lib/components/sidebar/Sidebar.svelte";
   import TopBar from "$lib/components/topbar/TopBar.svelte";
@@ -25,21 +26,7 @@
     const baseTheme = $settings.theme === "custom" ? "dark" : $settings.theme;
     root.setAttribute("data-theme", baseTheme);
 
-    const ALL_VARS = [
-      "bg",
-      "bg-2",
-      "bg-3",
-      "bg-4",
-      "border",
-      "accent",
-      "accent-h",
-      "accent-d",
-      "text",
-      "text-2",
-      "text-3",
-      "danger",
-    ];
-    for (const v of ALL_VARS) {
+    for (const v of COLOR_VARS) {
       root.style.removeProperty(`--${v}`);
     }
     if ($settings.theme === "custom") {

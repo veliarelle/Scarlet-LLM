@@ -41,6 +41,16 @@ pub struct VariationMeta {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatBookmark {
+    pub id: String,
+    pub message_id: String,
+    #[serde(default)]
+    pub leaf_id: Option<String>,
+    pub label: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Attachment {
     pub id: String,
     pub name: String,
@@ -57,6 +67,12 @@ pub struct Message {
     pub content: String,
     pub created_at: DateTime<Utc>,
     #[serde(default)]
+    pub parent_id: Option<String>,
+    #[serde(default)]
+    pub child_ids: Vec<String>,
+    #[serde(default)]
+    pub active_child_id: Option<String>,
+    #[serde(default)]
     pub model: Option<String>,
     #[serde(default)]
     pub variations: Vec<String>,
@@ -68,6 +84,8 @@ pub struct Message {
     pub image_url: Option<String>,
     #[serde(default)]
     pub attachments: Vec<Attachment>,
+    #[serde(default)]
+    pub bookmarked: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -96,6 +114,10 @@ pub struct Chat {
     pub proxy_id: Option<String>,
     #[serde(default)]
     pub summary: Option<ChatSummary>,
+    #[serde(default)]
+    pub active_leaf_id: Option<String>,
+    #[serde(default)]
+    pub bookmarks: Vec<ChatBookmark>,
     #[serde(default)]
     pub messages: Vec<Message>,
 }

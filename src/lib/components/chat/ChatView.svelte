@@ -1,25 +1,30 @@
 <script lang="ts">
-  import { Ghost, ImagePlus as ImagePlusIcon } from "lucide-svelte";
+  import { tick } from "svelte";
+  import { Bookmark as BookmarkIcon, Ghost, ImagePlus as ImagePlusIcon } from "lucide-svelte";
   import { api } from "$lib/api/invoke";
   import { tr } from "$lib/i18n";
   import { settings } from "$lib/stores/settings";
-  import { activeGenerationId, imageMode, incognito } from "$lib/stores/ui";
+  import { activeGenerationId, bookmarksPanelOpen, imageMode, incognito } from "$lib/stores/ui";
   import {
     activeChat,
-    addVariation,
     appendToMessage,
+    branchInfo,
+    createSiblingBranch,
+    createUserBranchFromEdit,
     deleteMessage,
     deleteSummary,
     ensureChat,
     forkActiveAt,
+    getVisibleMessages,
+    jumpToBookmark,
     persistActive,
-    popVariation,
     pushMessage,
     removeMessageById,
     rewindToMessage,
-    selectVariation,
+    selectSibling,
     setSummary,
     setMessageImageUrl,
+    toggleBookmark,
     updateSummaryContent,
     updateMessageContent,
   } from "$lib/stores/chats";
@@ -41,20 +46,19 @@
   let isAgentRunning = $state(false);
   let lastError = $state<string | null>(null);
   let activeStreamId = $state<string | null>(null);
+  let chatAreaEl: HTMLDivElement | undefined = $state();
+  let highlightedMessageId = $state<string | null>(null);
+  let highlightTimer: ReturnType<typeof setTimeout> | null = null;
   let summarizeStopRequested = false;
   let agentStopRequested = false;
   const MAX_AGENT_STEPS = 6;
 
-  const lastMsgIsUser = $derived(
-    !!$activeChat &&
-      $activeChat.messages.length > 0 &&
-      $activeChat.messages[$activeChat.messages.length - 1].role === "user"
-  );
-
   const canStopCurrent = $derived(generating && (activeStreamId !== null || isAgentRunning));
-  const contextUsed = $derived(estimateContextTokens($activeChat?.messages ?? [], $settings, $activeChat?.summary ?? null));
+  const visibleMessages = $derived(getVisibleMessages($activeChat));
+  const lastMsgIsUser = $derived(visibleMessages[visibleMessages.length - 1]?.role === "user");
+  const contextUsed = $derived(estimateContextTokens(visibleMessages, $settings, $activeChat?.summary ?? null));
   const contextWindow = $derived(Math.max(0, Number($settings.context_window ?? 0)));
-  const canSummarize = $derived(!!$activeChat && $activeChat.messages.length > 0 && !generating);
+  const canSummarize = $derived(!!$activeChat && visibleMessages.length > 0 && !generating);
 
   $effect(() => {
     activeGenerationId.set(activeStreamId);
@@ -206,7 +210,7 @@
     }
 
     const messages = applyAgentPrompt(
-      buildMessages($activeChat?.messages ?? [], requestSettings, $activeChat?.summary ?? null),
+      buildMessages(getVisibleMessages($activeChat), requestSettings, $activeChat?.summary ?? null),
       selectedAgent
     );
     const tools = selectedAgent ? providerToolsForAgent(requestSettings, selectedAgent) : buildTools(requestSettings);
@@ -315,21 +319,22 @@
   }
 
   function summarizeTranscript(chat: Chat, boundaryId?: string): string {
+    const visible = getVisibleMessages(chat);
     const boundaryIdx = boundaryId
-      ? chat.messages.findIndex((m) => m.id === boundaryId)
-      : chat.messages.length - 1;
-    const endIdx = boundaryIdx === -1 ? chat.messages.length - 1 : boundaryIdx;
-    const targetMessages = chat.messages.slice(0, endIdx + 1);
+      ? visible.findIndex((m) => m.id === boundaryId)
+      : visible.length - 1;
+    const endIdx = boundaryIdx === -1 ? visible.length - 1 : boundaryIdx;
+    const targetMessages = visible.slice(0, endIdx + 1);
     const existing = chat.summary;
     if (existing?.content.trim()) {
-      const idx = chat.messages.findIndex((m) => m.id === existing.after_message_id);
+      const idx = visible.findIndex((m) => m.id === existing.after_message_id);
       if (idx !== -1 && idx <= endIdx) {
         return [
           "Existing summary of earlier conversation:",
           existing.content.trim(),
           "",
           "Conversation after that summary:",
-          transcriptFromMessages(chat.messages.slice(idx + 1, endIdx + 1)),
+          transcriptFromMessages(visible.slice(idx + 1, endIdx + 1)),
         ].join("\n");
       }
     }
@@ -408,15 +413,16 @@
 
   function contextLimitExceeded(chat: Chat, requestSettings: Settings): boolean {
     const limit = Math.max(0, Number(requestSettings.context_window ?? 0));
-    return limit > 0 && estimateContextTokens(chat.messages, requestSettings, chat.summary ?? null) > limit;
+    return limit > 0 && estimateContextTokens(getVisibleMessages(chat), requestSettings, chat.summary ?? null) > limit;
   }
 
   function autoSummarizeBoundary(chat: Chat): Message | null {
-    if (chat.messages.length <= 1) return null;
-    const last = chat.messages[chat.messages.length - 1];
-    const boundaryIndex = last.role === "user" ? chat.messages.length - 2 : chat.messages.length - 1;
+    const visible = getVisibleMessages(chat);
+    if (visible.length <= 1) return null;
+    const last = visible[visible.length - 1];
+    const boundaryIndex = last.role === "user" ? visible.length - 2 : visible.length - 1;
     if (boundaryIndex < 0) return null;
-    const boundary = chat.messages[boundaryIndex];
+    const boundary = visible[boundaryIndex];
     if (chat.summary?.after_message_id === boundary.id) return null;
     return boundary;
   }
@@ -431,7 +437,7 @@
   }
 
   async function summarizeChat() {
-    if (generating || !$activeChat || $activeChat.messages.length === 0) return;
+    if (generating || !$activeChat || visibleMessages.length === 0) return;
     const chat = $activeChat;
     const requestSettings = snapshotSettings();
     if (!requestSettings.active_proxy_id || !requestSettings.active_model) {
@@ -439,7 +445,9 @@
       return;
     }
 
-    const boundary = chat.messages[chat.messages.length - 1];
+    const path = getVisibleMessages(chat);
+    const boundary = path[path.length - 1];
+    if (!boundary) return;
     await runSummarize(chat, requestSettings, boundary);
   }
 
@@ -517,19 +525,53 @@
     await forkActiveAt(id);
   }
 
-  async function onPrevVariation(msg: Message) {
-    const idx = (msg.variation_index ?? 0) - 1;
-    if (idx < 0) return;
-    selectVariation(msg.id, idx);
+  async function onPrevBranch(msg: Message) {
+    selectSibling(msg.id, -1);
     await persistActive();
   }
 
-  async function onNextVariation(msg: Message) {
-    const total = (msg.variations ?? []).length;
-    const idx = (msg.variation_index ?? 0) + 1;
-    if (idx >= total) return;
-    selectVariation(msg.id, idx);
+  async function onNextBranch(msg: Message) {
+    const info = branchInfo($activeChat, msg.id);
+    if (msg.role === "assistant" && info.index >= info.count - 1) {
+      await regenerateMessage(msg);
+      return;
+    }
+    selectSibling(msg.id, 1);
     await persistActive();
+  }
+
+  async function onToggleBookmark(id: string) {
+    toggleBookmark(id);
+    await persistActive();
+  }
+
+  async function onJumpBookmark(messageId: string, leafId?: string | null) {
+    jumpToBookmark(messageId, leafId);
+    await tick();
+    const target = Array.from(chatAreaEl?.querySelectorAll<HTMLElement>("[data-message-id]") ?? [])
+      .find((el) => el.dataset.messageId === messageId);
+    target?.scrollIntoView({ block: "center", behavior: "smooth" });
+    highlightedMessageId = messageId;
+    if (highlightTimer) clearTimeout(highlightTimer);
+    highlightTimer = setTimeout(() => {
+      highlightedMessageId = null;
+      highlightTimer = null;
+    }, 1000);
+    await persistActive();
+  }
+
+  function onBookmarkWheel(e: WheelEvent) {
+    const el = e.currentTarget as HTMLElement | null;
+    if (!el || el.scrollWidth <= el.clientWidth) return;
+    e.preventDefault();
+    el.scrollLeft += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+  }
+
+  async function onSendEditedUser(id: string, content: string) {
+    const created = createUserBranchFromEdit(id, content);
+    if (!created) return;
+    await persistActive();
+    await send("", []);
   }
 
   async function regenerateMessage(msg: Message) {
@@ -555,7 +597,15 @@
       isImageGenerating = true;
       const imageId = uid();
       activeStreamId = imageId;
-      addVariation(msg.id, "", requestSettings.active_model, null);
+      const branch = createSiblingBranch(msg.id, "", requestSettings.active_model, null);
+      if (!branch) {
+        generating = false;
+        generationStreaming = false;
+        isImageGenerating = false;
+        activeStreamId = null;
+        activeGenerationId.set(null);
+        return;
+      }
       try {
         const result = await api.generateImage({
           proxy_id: requestSettings.active_proxy_id,
@@ -564,14 +614,15 @@
           image_id: imageId,
           params: buildParams(requestSettings),
         });
-        popVariation(msg.id);
-        addVariation(msg.id, msg.content, requestSettings.active_model, result.url);
+        setMessageImageUrl(branch.id, result.url);
+        updateMessageContent(branch.id, msg.content);
         await persistActive();
       } catch (e) {
         if (!isCancelled(e)) {
           lastError = e instanceof Error ? e.message : String(e);
         }
-        popVariation(msg.id);
+        deleteMessage(branch.id);
+        rewindToMessage(msg.id);
       } finally {
         generating = false;
         generationStreaming = false;
@@ -582,10 +633,10 @@
       return;
     }
 
-    const allMessages = $activeChat.messages;
-    const idx = allMessages.findIndex((m) => m.id === msg.id);
+    const path = getVisibleMessages($activeChat);
+    const idx = path.findIndex((m) => m.id === msg.id);
     if (idx === -1) return;
-    const contextSlice = allMessages.slice(0, idx);
+    const contextSlice = path.slice(0, idx);
     const messages = applyAgentPrompt(
       buildMessages(contextSlice, requestSettings, $activeChat.summary ?? null),
       selectedAgent
@@ -600,26 +651,30 @@
     isAgentRunning = useAgentLoop;
     agentStopRequested = false;
     let acc = "";
-    let streamVariationAdded = false;
+    let branchId: string | null = null;
     let streamLimitReached = false;
     try {
       if (useAgentLoop) {
         activeStreamId = uid();
-        addVariation(msg.id, "", requestSettings.active_model);
+        const branch = createSiblingBranch(msg.id, "", requestSettings.active_model);
+        branchId = branch?.id ?? null;
+        if (!branchId) throw new Error("failed to create branch");
         try {
           const resp = await runAgentCompletion(messages, requestSettings, tools, selectedAgent);
-          updateMessageContent(msg.id, limitAssistantMessage(toolCallFallback(resp, requestSettings), requestSettings));
+          updateMessageContent(branchId, limitAssistantMessage(toolCallFallback(resp, requestSettings), requestSettings));
           if (resp.image_url) {
-            setMessageImageUrl(msg.id, resp.image_url);
+            setMessageImageUrl(branchId, resp.image_url);
           }
           await persistActive();
         } catch (inner) {
-          popVariation(msg.id);
+          deleteMessage(branchId);
+          rewindToMessage(msg.id);
           throw inner;
         }
       } else if (requestStreaming && tools.length === 0) {
-        addVariation(msg.id, "", requestSettings.active_model);
-        streamVariationAdded = true;
+        const branch = createSiblingBranch(msg.id, "", requestSettings.active_model);
+        branchId = branch?.id ?? null;
+        if (!branchId) throw new Error("failed to create branch");
         const streamId = uid();
         activeStreamId = streamId;
         await api.streamCompletion(input, streamId, (ev) => {
@@ -628,7 +683,7 @@
             const next = acc + ev.content;
             const limited = limitAssistantMessage(next, requestSettings);
             acc = limited;
-            updateMessageContent(msg.id, limited);
+            if (branchId) updateMessageContent(branchId, limited);
             if (limited !== next) {
               streamLimitReached = true;
               void api.cancelGeneration(streamId);
@@ -638,24 +693,28 @@
           }
         });
         if (acc === "") {
-          popVariation(msg.id);
-          streamVariationAdded = false;
+          deleteMessage(branchId);
+          rewindToMessage(msg.id);
+          branchId = null;
         } else {
           await persistActive();
         }
       } else {
-        addVariation(msg.id, "", requestSettings.active_model);
+        const branch = createSiblingBranch(msg.id, "", requestSettings.active_model);
+        branchId = branch?.id ?? null;
+        if (!branchId) throw new Error("failed to create branch");
         try {
           const requestId = uid();
           activeStreamId = requestId;
           const resp = await api.sendCompletionCancellable(input, requestId);
-          updateMessageContent(msg.id, limitAssistantMessage(toolCallFallback(resp, requestSettings), requestSettings));
+          updateMessageContent(branchId, limitAssistantMessage(toolCallFallback(resp, requestSettings), requestSettings));
           if (resp.image_url) {
-            setMessageImageUrl(msg.id, resp.image_url);
+            setMessageImageUrl(branchId, resp.image_url);
           }
           await persistActive();
         } catch (inner) {
-          popVariation(msg.id);
+          deleteMessage(branchId);
+          rewindToMessage(msg.id);
           throw inner;
         }
       }
@@ -663,7 +722,13 @@
       if (!isCancelled(e)) {
         lastError = e instanceof Error ? e.message : String(e);
       }
-      if (streamVariationAdded) popVariation(msg.id);
+      if (branchId) {
+        const branch = $activeChat?.messages.find((m) => m.id === branchId);
+        if (branch && branch.content === "" && !branch.image_url) {
+          deleteMessage(branchId);
+          rewindToMessage(msg.id);
+        }
+      }
     } finally {
       generating = false;
       generationStreaming = false;
@@ -699,8 +764,25 @@
   </div>
 {/if}
 
-<div class="chat-area">
-  {#if !$activeChat || $activeChat.messages.length === 0}
+{#if $bookmarksPanelOpen && $activeChat && ($activeChat.bookmarks ?? []).length > 0}
+  <div class="bookmark-strip" aria-label={$tr("chat.bookmarks")} onwheel={onBookmarkWheel}>
+    <span class="bookmark-icon" title={$tr("chat.bookmarks")}>
+      <BookmarkIcon size={14} fill="currentColor" />
+    </span>
+    {#each $activeChat.bookmarks ?? [] as bookmark (bookmark.id)}
+      <button class="bookmark-chip" onclick={() => onJumpBookmark(bookmark.message_id, bookmark.leaf_id)} title={bookmark.label}>
+        {bookmark.label}
+      </button>
+    {/each}
+  </div>
+{/if}
+
+<div
+  class="chat-area"
+  class:with-bookmarks={$bookmarksPanelOpen && $activeChat && ($activeChat.bookmarks ?? []).length > 0}
+  bind:this={chatAreaEl}
+>
+  {#if !$activeChat || visibleMessages.length === 0}
     <div class="empty-state">
       <div class="empty-card">
         <div class="empty-logo">Scarlet</div>
@@ -709,18 +791,25 @@
     </div>
   {:else}
     <div class="chat-inner">
-      {#each $activeChat.messages as msg, i (msg.id)}
-        <MessageBubble
-          {msg}
-          isLast={i === $activeChat.messages.length - 1}
-          onEdit={(c) => onEditMessage(msg.id, c)}
-          onDelete={() => onDeleteMessage(msg.id)}
-          onRewind={() => onRewindMessage(msg.id)}
-          onFork={() => onForkMessage(msg.id)}
-          onPrevVariation={() => onPrevVariation(msg)}
-          onNextVariation={() => onNextVariation(msg)}
-          onRegenerate={() => regenerateMessage(msg)}
-        />
+      {#each visibleMessages as msg (msg.id)}
+        <div class="message-anchor" data-message-id={msg.id}>
+          <MessageBubble
+            {msg}
+            branchIndex={branchInfo($activeChat, msg.id).index}
+            branchCount={branchInfo($activeChat, msg.id).count}
+            branchLocked={generating}
+            highlighted={highlightedMessageId === msg.id}
+            onEdit={(c) => onEditMessage(msg.id, c)}
+            onSendEdit={(c) => onSendEditedUser(msg.id, c)}
+            onDelete={() => onDeleteMessage(msg.id)}
+            onRewind={() => onRewindMessage(msg.id)}
+            onFork={() => onForkMessage(msg.id)}
+            onPrevBranch={() => onPrevBranch(msg)}
+            onNextBranch={() => onNextBranch(msg)}
+            onRegenerate={() => regenerateMessage(msg)}
+            onToggleBookmark={() => onToggleBookmark(msg.id)}
+          />
+        </div>
         {#if $activeChat.summary?.after_message_id === msg.id}
           <SummaryBoundary
             summary={$activeChat.summary}
@@ -787,12 +876,80 @@
       transparent 100%
     );
   }
+  .chat-area.with-bookmarks {
+    padding-top: 28px;
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      black 48px,
+      black calc(100% - 28px),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      black 48px,
+      black calc(100% - 28px),
+      transparent 100%
+    );
+  }
   .chat-inner {
     width: 100%;
     padding: 0 24px;
     display: flex;
     flex-direction: column;
     gap: 0;
+  }
+  .message-anchor {
+    width: 100%;
+  }
+  .bookmark-strip {
+    position: relative;
+    z-index: 3;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+    margin: 10px 24px 0;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--bg) 88%, var(--bg-3));
+    box-shadow: 0 12px 18px color-mix(in srgb, var(--bg) 78%, transparent);
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+  .bookmark-icon {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    color: var(--text-3);
+    background: var(--bg-4);
+  }
+  .bookmark-chip {
+    flex: 0 0 auto;
+    max-width: min(260px, 58vw);
+    min-height: 34px;
+    padding: 6px 10px;
+    border-radius: 7px;
+    background: var(--bg-4);
+    color: var(--text-2);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .bookmark-chip:hover {
+    color: var(--text);
+    background: color-mix(in srgb, var(--accent) 15%, var(--bg-4));
   }
 
   .empty-state {

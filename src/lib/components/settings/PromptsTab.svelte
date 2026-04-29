@@ -26,8 +26,7 @@
   } from "$lib/stores/presets";
   import { uid } from "$lib/utils/id";
   import { clickOutside } from "$lib/utils/clickOutside";
-  import { DEFAULT_SUMMARIZE_PROMPT, type Prompt, type PromptUtilities } from "$lib/types/settings";
-  import type { Role } from "$lib/types/chat";
+  import { DEFAULT_SUMMARIZE_PROMPT, type Prompt, type PromptRole, type PromptUtilities } from "$lib/types/settings";
   import Toggle from "./Toggle.svelte";
 
   let editingId = $state<string | null>(null);
@@ -183,7 +182,7 @@
     $presetList.find((p) => p.id === $settings.active_preset_id)?.name ?? $tr("prompts.activePreset")
   );
 
-  const ROLES: Role[] = ["system", "user", "assistant"];
+  const ROLES: PromptRole[] = ["system", "user", "assistant"];
 </script>
 
 <div class="prompts-tab">
@@ -344,7 +343,7 @@
               <select
                 class="select"
                 value={p.role}
-                onchange={(e) => update(p.id, { role: (e.target as HTMLSelectElement).value as Role })}
+                onchange={(e) => update(p.id, { role: (e.target as HTMLSelectElement).value as PromptRole })}
               >
                 {#each ROLES as r (r)}
                   <option value={r}>{r}</option>

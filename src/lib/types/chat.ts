@@ -33,18 +33,30 @@ export interface VariationMeta {
   image_url?: string | null;
 }
 
+export interface ChatBookmark {
+  id: string;
+  message_id: string;
+  leaf_id?: string | null;
+  label: string;
+  created_at: string;
+}
+
 // Сообщение в чате (с метаданными):
 export interface Message {
   id: string;
   role: Role;
   content: string;
   created_at: string; // ISO
+  parent_id?: string | null;
+  child_ids?: string[];
+  active_child_id?: string | null;
   model?: string | null;
   variations?: string[];
   variation_index?: number;
   variation_meta?: VariationMeta[];
   image_url?: string | null;
   attachments?: Attachment[];
+  bookmarked?: boolean;
 }
 
 export interface Chat {
@@ -56,6 +68,8 @@ export interface Chat {
   model?: string | null;
   proxy_id?: string | null;
   summary?: ChatSummary | null;
+  active_leaf_id?: string | null;
+  bookmarks?: ChatBookmark[];
   messages: Message[];
 }
 
