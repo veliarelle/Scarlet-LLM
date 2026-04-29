@@ -402,25 +402,70 @@ function collectSubtreeIds(messages: Message[], messageId: string): Set<string> 
   return out;
 }
 
+function removeMessageSubtrees(chat: Chat, targetIds: string[], currentId: string): Chat {
+  const current = chat.messages.find((m) => m.id === currentId);
+  if (!current) return chat;
+  const currentSiblings = current.parent_id
+    ? chat.messages.find((m) => m.id === current.parent_id)?.child_ids ?? []
+    : roots(chat.messages).map((m) => m.id);
+  const removed = new Set<string>();
+  for (const id of targetIds) {
+    for (const subtreeId of collectSubtreeIds(chat.messages, id)) {
+      removed.add(subtreeId);
+    }
+  }
+  const messages = chat.messages
+    .filter((m) => !removed.has(m.id))
+    .map((m) => ({
+      ...m,
+      child_ids: (m.child_ids ?? []).filter((id) => !removed.has(id)),
+      active_child_id: m.active_child_id && !removed.has(m.active_child_id) ? m.active_child_id : null,
+    }));
+  const bookmarks = (chat.bookmarks ?? []).filter((b) => !removed.has(b.message_id));
+  const summary = chat.summary && removed.has(chat.summary.after_message_id) ? null : chat.summary;
+  const nextChat = { ...chat, messages };
+  const currentIndex = currentSiblings.indexOf(currentId);
+  const siblingExists = (id: string | undefined) => !!id && !removed.has(id) && messages.some((m) => m.id === id);
+  let remainingSibling: string | undefined;
+  for (let i = currentIndex - 1; i >= 0; i -= 1) {
+    if (siblingExists(currentSiblings[i])) {
+      remainingSibling = currentSiblings[i];
+      break;
+    }
+  }
+  if (!remainingSibling) {
+    for (let i = Math.max(0, currentIndex + 1); i < currentSiblings.length; i += 1) {
+      if (siblingExists(currentSiblings[i])) {
+        remainingSibling = currentSiblings[i];
+        break;
+      }
+    }
+  }
+  const nextLeaf = remainingSibling
+    ? branchLeafFrom(nextChat, remainingSibling)
+    : current.parent_id && messages.some((m) => m.id === current.parent_id)
+      ? current.parent_id
+      : roots(messages)[0]?.id ?? null;
+
+  return { ...chat, messages, bookmarks, summary, active_leaf_id: nextLeaf, updated_at: nowIso() };
+}
+
 export function deleteMessage(messageId: string) {
+  activeChat.update((c) => {
+    if (!c) return c;
+    return removeMessageSubtrees(c, [messageId], messageId);
+  });
+}
+
+export function deleteMessageGroup(messageId: string) {
   activeChat.update((c) => {
     if (!c) return c;
     const current = c.messages.find((m) => m.id === messageId);
     if (!current) return c;
-    const removed = collectSubtreeIds(c.messages, messageId);
-    const messages = c.messages
-      .filter((m) => !removed.has(m.id))
-      .map((m) => ({
-        ...m,
-        child_ids: (m.child_ids ?? []).filter((id) => !removed.has(id)),
-        active_child_id: m.active_child_id && !removed.has(m.active_child_id) ? m.active_child_id : null,
-      }));
-    const bookmarks = (c.bookmarks ?? []).filter((b) => !removed.has(b.message_id));
-    const summary = c.summary && removed.has(c.summary.after_message_id) ? null : c.summary;
-    const nextLeaf = current.parent_id && messages.some((m) => m.id === current.parent_id)
-      ? current.parent_id
-      : roots(messages)[0]?.id ?? null;
-    return { ...c, messages, bookmarks, summary, active_leaf_id: nextLeaf, updated_at: nowIso() };
+    const siblings = current.parent_id
+      ? c.messages.find((m) => m.id === current.parent_id)?.child_ids ?? [messageId]
+      : roots(c.messages).map((m) => m.id);
+    return removeMessageSubtrees(c, siblings, messageId);
   });
 }
 

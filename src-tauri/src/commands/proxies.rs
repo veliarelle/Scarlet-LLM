@@ -14,6 +14,21 @@ pub struct ProxyInput {
     pub kind: ProxyKind,
 }
 
+fn default_base_url(kind: &ProxyKind) -> &'static str {
+    match kind {
+        ProxyKind::OpenaiCompat | ProxyKind::OpenaiResponses => "https://api.openai.com/v1",
+        ProxyKind::AnthropicNative => "https://api.anthropic.com",
+        ProxyKind::GoogleNative => "https://generativelanguage.googleapis.com",
+        ProxyKind::OpenRouter => "https://openrouter.ai/api/v1",
+    }
+}
+
+fn apply_default_base_url(proxy: &mut Proxy) {
+    if proxy.base_url.trim().is_empty() {
+        proxy.base_url = default_base_url(&proxy.kind).to_string();
+    }
+}
+
 fn load_secrets(app: &AppHandle) -> Result<Vec<ProxySecret>, String> {
     json_store::read_or_default(&proxy_secrets_path(app)?)
 }
@@ -80,10 +95,12 @@ fn store_private(app: &AppHandle, list: &[Proxy]) -> Result<(), String> {
 }
 
 pub(crate) fn find_private(app: &AppHandle, id: &str) -> Result<Proxy, String> {
-    load_private(app)?
+    let mut proxy = load_private(app)?
         .into_iter()
         .find(|p| p.id == id)
-        .ok_or_else(|| format!("proxy {id} not found"))
+        .ok_or_else(|| format!("proxy {id} not found"))?;
+    apply_default_base_url(&mut proxy);
+    Ok(proxy)
 }
 
 #[tauri::command]
@@ -100,7 +117,7 @@ pub fn create_proxy(app: AppHandle, input: ProxyInput) -> Result<PublicProxy, St
     let proxy = Proxy {
         id: Uuid::new_v4().to_string(),
         name: input.name,
-        base_url: input.base_url,
+        base_url: input.base_url.trim().to_string(),
         key: input.key,
         kind: input.kind,
         created_at: Utc::now(),
@@ -118,7 +135,7 @@ pub fn update_proxy(app: AppHandle, id: String, input: ProxyInput) -> Result<Pub
         .find(|p| p.id == id)
         .ok_or_else(|| format!("proxy {id} not found"))?;
     proxy.name = input.name;
-    proxy.base_url = input.base_url;
+    proxy.base_url = input.base_url.trim().to_string();
     if !input.key.is_empty() {
         proxy.key = input.key;
     }

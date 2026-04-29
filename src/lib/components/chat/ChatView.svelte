@@ -12,6 +12,7 @@
     createSiblingBranch,
     createUserBranchFromEdit,
     deleteMessage,
+    deleteMessageGroup,
     deleteSummary,
     ensureChat,
     forkActiveAt,
@@ -512,6 +513,11 @@
     await persistActive();
   }
 
+  async function onDeleteMessageGroup(id: string) {
+    deleteMessageGroup(id);
+    await persistActive();
+  }
+
   async function onRewindMessage(id: string) {
     rewindToMessage(id);
     await persistActive();
@@ -802,6 +808,7 @@
             onEdit={(c) => onEditMessage(msg.id, c)}
             onSendEdit={(c) => onSendEditedUser(msg.id, c)}
             onDelete={() => onDeleteMessage(msg.id)}
+            onDeleteGroup={() => onDeleteMessageGroup(msg.id)}
             onRewind={() => onRewindMessage(msg.id)}
             onFork={() => onForkMessage(msg.id)}
             onPrevBranch={() => onPrevBranch(msg)}

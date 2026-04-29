@@ -1,4 +1,4 @@
-# OS / editor noise
+
 .DS_Store
 Thumbs.db
 *.swp
@@ -6,32 +6,26 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Dependencies
 node_modules/
 
-# Frontend build output
 /build/
 /.svelte-kit/
 /package/
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
-# Tauri / Rust build output
 src-tauri/target/
 src-tauri/gen/schemas/
 
-# Android generated build output
 src-tauri/gen/android/.gradle/
 src-tauri/gen/android/**/build/
 src-tauri/gen/android/local.properties
 
-# Local app data, if copied/exported into the project
 settings.json
 proxies.json
 presets/
 chats/
 
-# Environment files and secrets
 .env
 .env.*
 !.env.example
@@ -46,10 +40,8 @@ key.properties
 src-tauri/gen/android/keystore.properties
 src-tauri/gen/android/key.properties
 
-# Local helper scripts
 bump-version.sh
 
-# Release artifacts
 *.apk
 *.aab
 *.apks
@@ -62,7 +54,6 @@ bump-version.sh
 *.dmg
 *.pkg
 
-# Logs
 *.log
 npm-debug.log*
 yarn-debug.log*

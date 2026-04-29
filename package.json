@@ -1,6 +1,6 @@
 {
   "name": "scarlet-llm",
-  "version": "1.0.3",
+  "version": "1.0.5",
   "description": "Scarlet LLM - local cross-platform frontend for LLMs",
   "type": "module",
   "scripts": {

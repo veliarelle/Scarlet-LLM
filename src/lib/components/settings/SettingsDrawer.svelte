@@ -11,6 +11,7 @@
 
   type Tab = "general" | "params" | "reasoning" | "prompts" | "tools" | "appearance";
   let tab = $state<Tab>("general");
+  let overlayPointerDown = false;
 
   const TABS = $derived<{ id: Tab; label: string }[]>([
     { id: "general", label: $tr("settings.tabs.general") },
@@ -24,8 +25,13 @@
   function close() {
     settingsOpen.set(false);
   }
-  function onOverlay(e: MouseEvent) {
-    if (e.target === e.currentTarget) close();
+  function onOverlayPointerDown(e: PointerEvent) {
+    overlayPointerDown = e.target === e.currentTarget;
+  }
+  function onOverlayClick(e: MouseEvent) {
+    const shouldClose = overlayPointerDown && e.target === e.currentTarget;
+    overlayPointerDown = false;
+    if (shouldClose) close();
   }
 </script>
 
@@ -34,7 +40,8 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="overlay"
-    onclick={onOverlay}
+    onpointerdown={onOverlayPointerDown}
+    onclick={onOverlayClick}
     onkeydown={(e) => e.key === "Escape" && close()}
   >
     <div class="drawer" role="dialog" aria-modal="true" aria-label={$tr("settings.title")}>

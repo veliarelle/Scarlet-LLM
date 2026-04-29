@@ -56,11 +56,14 @@ const ru = {
   "general.importProfileConfirm": "Импорт профиля заменит текущие настройки и добавит/перезапишет пресеты. Продолжить?",
 
   "params.add": "Добавить параметр",
+  "params.addFromList": "Из списка",
   "params.addFromJson": "Из JSON",
   "params.delete": "Удалить параметр",
   "params.invalidJson": "Некорректный JSON",
   "params.jsonPrompt": "Введите JSON-объект, например {example}",
+  "params.noPresetResults": "Ничего не найдено",
   "params.objectExpected": "Ожидается объект {key: value}",
+  "params.searchPresets": "Поиск параметров…",
   "params.section": "Sampling parameters",
 
   "reasoning.enabled": "Включить reasoning",
@@ -193,6 +196,8 @@ const ru = {
 
   "message.copy": "Копировать",
   "message.bookmark": "Закладка",
+  "message.deleteMessage": "Message",
+  "message.deleteSwipe": "Swipe",
   "message.download": "Скачать",
   "message.fork": "Форкнуть отсюда",
   "message.generatedImage": "generated image",
@@ -304,11 +309,14 @@ const en: Record<TranslationKey, string> = {
   "general.importProfileConfirm": "Importing a profile will replace current settings and add/overwrite presets. Continue?",
 
   "params.add": "Add parameter",
+  "params.addFromList": "From list",
   "params.addFromJson": "From JSON",
   "params.delete": "Delete parameter",
   "params.invalidJson": "Invalid JSON",
   "params.jsonPrompt": "Enter a JSON object, for example {example}",
+  "params.noPresetResults": "Nothing found",
   "params.objectExpected": "Expected an object {key: value}",
+  "params.searchPresets": "Search parameters...",
   "params.section": "Sampling parameters",
 
   "reasoning.enabled": "Enable reasoning",
@@ -441,6 +449,8 @@ const en: Record<TranslationKey, string> = {
 
   "message.copy": "Copy",
   "message.bookmark": "Bookmark",
+  "message.deleteMessage": "Message",
+  "message.deleteSwipe": "Swipe",
   "message.download": "Download",
   "message.fork": "Fork from here",
   "message.generatedImage": "generated image",

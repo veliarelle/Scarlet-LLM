@@ -23,6 +23,7 @@
   let renamingId = $state<string | null>(null);
   let renameValue = $state("");
   let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+  let overlayPointerDown = false;
 
   onMount(async () => {
     await refreshList();
@@ -30,6 +31,16 @@
 
   function close() {
     sidebarOpen.set(false);
+  }
+
+  function onOverlayPointerDown(e: PointerEvent) {
+    overlayPointerDown = e.target === e.currentTarget;
+  }
+
+  function onOverlayClick(e: MouseEvent) {
+    const shouldClose = overlayPointerDown && e.target === e.currentTarget;
+    overlayPointerDown = false;
+    if (shouldClose) close();
   }
 
   async function stopActiveGeneration() {
@@ -125,7 +136,13 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="overlay" class:visible={$sidebarOpen} onclick={close} aria-hidden="true"></div>
+<div
+  class="overlay"
+  class:visible={$sidebarOpen}
+  onpointerdown={onOverlayPointerDown}
+  onclick={onOverlayClick}
+  aria-hidden="true"
+></div>
 
 <aside class="sidebar" class:open={$sidebarOpen} class:collapsed={!$sidebarOpen}>
   <div class="header">

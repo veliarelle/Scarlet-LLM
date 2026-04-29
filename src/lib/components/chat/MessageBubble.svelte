@@ -23,6 +23,7 @@
     msg,
     onEdit,
     onDelete,
+    onDeleteGroup,
     onRewind,
     onFork,
     onPrevBranch,
@@ -38,6 +39,7 @@
     msg: Message;
     onEdit?: (content: string) => void;
     onDelete?: () => void;
+    onDeleteGroup?: () => void;
     onRewind?: () => void;
     onFork?: () => void;
     onPrevBranch?: () => void;
@@ -55,6 +57,7 @@
   let editing = $state(false);
   let editVal = $state("");
   let copied = $state(false);
+  let deleteChoiceOpen = $state(false);
   let editAreaEl: HTMLTextAreaElement | undefined = $state();
   let touchStartX: number | null = null;
 
@@ -63,6 +66,10 @@
       editAreaEl.focus();
       autoResize();
     }
+  });
+
+  $effect(() => {
+    if (!hovered) deleteChoiceOpen = false;
   });
 
   function autoResize() {
@@ -159,6 +166,24 @@
     if (branchLocked) return;
     if (isAssistant && atLastBranch) onRegenerate?.();
     else onNextBranch?.();
+  }
+
+  function clickDelete() {
+    if (branchTotal > 1) {
+      deleteChoiceOpen = !deleteChoiceOpen;
+      return;
+    }
+    onDelete?.();
+  }
+
+  function deleteSwipe() {
+    deleteChoiceOpen = false;
+    onDelete?.();
+  }
+
+  function deleteWholeMessage() {
+    deleteChoiceOpen = false;
+    onDeleteGroup?.();
   }
 </script>
 
@@ -266,9 +291,17 @@
           <button class="tb-btn" title={$tr("common.edit")} onclick={startEdit}>
             <Pencil size={13} />
           </button>
-          <button class="tb-btn" title={$tr("common.delete")} onclick={() => onDelete?.()}>
-            <Trash2 size={13} />
-          </button>
+          <div class="delete-wrap">
+            {#if deleteChoiceOpen}
+              <div class="delete-choice">
+                <button onclick={deleteWholeMessage}>{$tr("message.deleteMessage")}</button>
+                <button onclick={deleteSwipe}>{$tr("message.deleteSwipe")}</button>
+              </div>
+            {/if}
+            <button class="tb-btn" title={$tr("common.delete")} onclick={clickDelete}>
+              <Trash2 size={13} />
+            </button>
+          </div>
           <button class="tb-btn" title={$tr("message.rewind")} onclick={() => onRewind?.()}>
             <Scissors size={13} />
           </button>
@@ -633,6 +666,50 @@
     border-radius: 8px;
     padding: 3px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  }
+  .delete-wrap {
+    position: relative;
+    display: flex;
+  }
+  .delete-choice {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 7px);
+    transform: translateX(-50%);
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 8px;
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    z-index: 6;
+  }
+  .delete-choice::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -5px;
+    width: 8px;
+    height: 8px;
+    background: var(--bg-3);
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    transform: translateX(-50%) rotate(45deg);
+  }
+  .delete-choice button {
+    position: relative;
+    z-index: 1;
+    min-height: 26px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    color: var(--text-2);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .delete-choice button:hover {
+    background: color-mix(in srgb, var(--danger) 14%, var(--bg-4));
+    color: var(--text);
   }
   .tb-btn {
     display: flex;

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Server, X, Plus, Pencil, Trash2, Eye, EyeOff } from "lucide-svelte";
+  import { Server, X, Plus, Pencil, Trash2, Save } from "lucide-svelte";
   import { tr } from "$lib/i18n";
   import { proxies } from "$lib/stores/proxies";
   import { settings } from "$lib/stores/settings";
@@ -21,10 +21,11 @@
   };
 
   let expandedId = $state<string | null>(null);
-  let showPwdMap = $state<Record<string, boolean>>({});
 
   // Локальные edit-буферы по id, чтобы не дёргать backend на каждое нажатие
   let buffers = $state<Record<string, { name: string; base_url: string; key: string; kind: ProxyKind }>>({});
+  let savedMap = $state<Record<string, boolean>>({});
+  let savedTimerMap = new Map<string, ReturnType<typeof setTimeout>>();
 
   function close() {
     proxyPanelOpen.set(false);
@@ -47,6 +48,14 @@
     const buf = buffers[p.id];
     if (!buf) return;
     await proxies.edit(p.id, buf);
+    savedMap = { ...savedMap, [p.id]: true };
+    const oldTimer = savedTimerMap.get(p.id);
+    if (oldTimer) clearTimeout(oldTimer);
+    const timer = setTimeout(() => {
+      savedMap = { ...savedMap, [p.id]: false };
+      savedTimerMap.delete(p.id);
+    }, 2000);
+    savedTimerMap.set(p.id, timer);
   }
 
   async function remove(p: Proxy) {
@@ -67,6 +76,10 @@
     });
     expandedId = p.id;
     buffers[p.id] = { name: p.name, base_url: p.base_url, key: "", kind: p.kind };
+  }
+
+  function displayBaseUrl(p: Proxy): string {
+    return p.base_url || BASE_URL_HINTS[p.kind];
   }
 </script>
 
@@ -90,7 +103,7 @@
             <div class="dot" class:active={$settings.active_proxy_id === p.id}></div>
             <div class="info">
               <span class="name">{p.name}</span>
-              <span class="url">{p.base_url || $tr("proxy.noUrl")}</span>
+              <span class="url">{displayBaseUrl(p)}</span>
             </div>
           </button>
           <button
@@ -116,40 +129,31 @@
             <input
               class="text-input"
               bind:value={buffers[p.id].name}
-              onblur={() => saveEdit(p)}
               placeholder={$tr("proxy.namePlaceholder")}
             />
+            <button
+              class="save-btn"
+              class:saved={savedMap[p.id]}
+              onclick={() => saveEdit(p)}
+              title={$tr("common.save")}
+              aria-label={$tr("common.save")}
+            >
+              <Save size={14} />
+            </button>
             <input
               class="text-input"
               bind:value={buffers[p.id].base_url}
-              onblur={() => saveEdit(p)}
               placeholder={BASE_URL_HINTS[buffers[p.id].kind]}
             />
-            <div class="pwd-row">
-              <input
-                class="text-input"
-                type={showPwdMap[p.id] ? "text" : "password"}
-                bind:value={buffers[p.id].key}
-                onblur={() => saveEdit(p)}
-                placeholder={p.has_key ? $tr("proxy.apiKeySaved") : $tr("proxy.apiKey")}
-              />
-              <button
-                class="icon-btn"
-                onclick={() =>
-                  (showPwdMap = { ...showPwdMap, [p.id]: !showPwdMap[p.id] })}
-                aria-label={$tr("proxy.showKey")}
-              >
-                {#if showPwdMap[p.id]}
-                  <EyeOff size={15} />
-                {:else}
-                  <Eye size={15} />
-                {/if}
-              </button>
-            </div>
+            <input
+              class="text-input"
+              type="password"
+              bind:value={buffers[p.id].key}
+              placeholder={p.has_key ? $tr("proxy.apiKeySaved") : $tr("proxy.apiKey")}
+            />
             <select
               class="text-input"
               bind:value={buffers[p.id].kind}
-              onchange={() => saveEdit(p)}
             >
               {#each Object.entries(PROXY_KIND_LABELS) as [v, label] (v)}
                 <option value={v}>{label}</option>
@@ -291,18 +295,11 @@
   }
 
   .entry-edit {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 6px;
     padding: 8px 10px;
     background: var(--bg-3);
-  }
-  .pwd-row {
-    display: flex;
-    gap: 6px;
-  }
-  .pwd-row .text-input {
-    flex: 1;
   }
   .text-input {
     background: var(--bg-3);
@@ -316,12 +313,38 @@
   .entry-edit .text-input {
     background: var(--bg-2);
   }
+  .entry-edit .text-input:not(:first-child),
+  .entry-edit select {
+    grid-column: 1 / -1;
+  }
   .text-input:focus {
     border-color: var(--accent-d);
   }
   .text-input option {
     background: var(--bg-2);
     color: var(--text);
+  }
+  .save-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    min-height: 34px;
+    padding: 0;
+    border-radius: 7px;
+    background: var(--accent-d);
+    border: 1px solid color-mix(in srgb, var(--accent-d) 72%, white);
+    color: white;
+    font-size: 12px;
+    font-weight: 600;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .save-btn:hover {
+    background: color-mix(in srgb, var(--accent-d) 82%, white);
+  }
+  .save-btn.saved {
+    background: color-mix(in srgb, #22c55e 78%, var(--bg-3));
+    border-color: color-mix(in srgb, #22c55e 70%, var(--border));
   }
 
   .add-btn {

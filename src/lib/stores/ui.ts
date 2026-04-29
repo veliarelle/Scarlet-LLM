@@ -8,5 +8,5 @@ export const proxyPanelOpen = writable<boolean>(false);
 export const incognito = writable<boolean>(false);
 export const selectMode = writable<boolean>(false);
 export const imageMode = writable<boolean>(false);
-export const bookmarksPanelOpen = writable<boolean>(true);
+export const bookmarksPanelOpen = writable<boolean>(false);
 export const activeGenerationId = writable<string | null>(null);
