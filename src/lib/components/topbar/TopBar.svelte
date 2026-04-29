@@ -24,22 +24,16 @@
 </script>
 
 <div class="topbar">
-  <button
-    class="icon-btn mob-menu"
-    onclick={() => sidebarOpen.update((v) => !v)}
-    aria-label={$tr("common.menu")}
-  >
-    <Menu size={18} />
-  </button>
-
-  <button
-    class="icon-btn desktop-only"
-    title={$tr("topbar.showHideSidebar")}
-    onclick={() => sidebarOpen.update((v) => !v)}
-    aria-label={$tr("topbar.showHideSidebar")}
-  >
-    <Menu size={18} />
-  </button>
+  <div class="left">
+    <button
+      class="icon-btn"
+      title={$tr("topbar.showHideSidebar")}
+      onclick={() => sidebarOpen.update((v) => !v)}
+      aria-label={$tr("topbar.showHideSidebar")}
+    >
+      <Menu size={18} />
+    </button>
+  </div>
 
   <div class="mid">
     <ModelSelector />
@@ -111,17 +105,27 @@
     -webkit-backdrop-filter: blur(var(--topbar-blur, 0px));
     position: relative;
     z-index: 20;
+    width: 100%;
+    overflow: visible;
+  }
+  .left {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
   }
   .mid {
     display: flex;
     align-items: center;
     gap: 6px;
-    flex: 1;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: visible;
   }
   .right {
     display: flex;
     align-items: center;
     gap: 4px;
+    flex: 0 0 auto;
   }
   .icon-btn {
     position: relative;
@@ -164,20 +168,4 @@
     border-radius: 1px;
   }
 
-  .mob-menu {
-    display: none;
-  }
-  @media (max-width: 767px) {
-    .mob-menu {
-      display: flex;
-    }
-  }
-  .desktop-only {
-    display: flex;
-  }
-  @media (max-width: 767px) {
-    .desktop-only {
-      display: none;
-    }
-  }
 </style>

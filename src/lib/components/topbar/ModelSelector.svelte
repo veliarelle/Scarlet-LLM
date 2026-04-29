@@ -163,6 +163,8 @@
 <style>
   .selector-wrap {
     position: relative;
+    flex: 0 1 auto;
+    min-width: 0;
   }
   .selector-btn {
     display: flex;
@@ -176,7 +178,13 @@
     font-size: 13px;
     white-space: nowrap;
     transition: background 0.12s, color 0.12s;
-    max-width: 200px;
+    max-width: min(200px, 34vw);
+    min-width: 0;
+  }
+  .selector-btn span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .selector-btn:hover {
     background: var(--bg-4);

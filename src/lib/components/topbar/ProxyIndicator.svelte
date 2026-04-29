@@ -26,6 +26,8 @@
 <style>
   .wrap {
     position: relative;
+    flex: 0 1 auto;
+    min-width: 0;
   }
   .indicator {
     display: flex;
@@ -38,6 +40,8 @@
     color: var(--text-2);
     font-size: 13px;
     transition: background 0.12s, color 0.12s;
+    max-width: min(180px, 30vw);
+    min-width: 0;
   }
   .indicator:hover {
     background: var(--bg-4);
@@ -55,6 +59,7 @@
   }
   .name {
     max-width: 100px;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
