@@ -470,6 +470,49 @@ fn image_response_url_from_text(text: &str) -> Result<String, String> {
     }
 }
 
+fn image_endpoint(base_url: &str, method: &str) -> String {
+    let base = base_url.trim_end_matches('/');
+    if let Some(root) = base.strip_suffix("/v1beta") {
+        format!("{root}/v1/images/{method}")
+    } else if base.ends_with("/v1") {
+        format!("{base}/images/{method}")
+    } else {
+        format!("{base}/v1/images/{method}")
+    }
+}
+
+fn image_prompt_with_file_context(prompt: &str, attachments: &[Attachment]) -> String {
+    let prompt = if prompt.trim().is_empty() {
+        "Use the attached image as reference.".to_string()
+    } else {
+        prompt.to_string()
+    };
+    let file_context = attachments
+        .iter()
+        .filter(|att| !att.mime_type.starts_with("image/"))
+        .filter_map(|att| {
+            att.text
+                .as_ref()
+                .filter(|text| !text.trim().is_empty())
+                .map(|text| {
+                    format!(
+                        "[Attached file: {}, {}]\n\n{}",
+                        att.name,
+                        att.mime_type,
+                        text.trim()
+                    )
+                })
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n");
+
+    if file_context.is_empty() {
+        prompt
+    } else {
+        format!("{prompt}\n\n{file_context}")
+    }
+}
+
 async fn generate_openai_image(
     client: &reqwest::Client,
     cancel: Arc<Notify>,
@@ -487,13 +530,7 @@ async fn generate_openai_image(
     } else {
         "edits"
     };
-    let endpoint = if let Some(root) = base.strip_suffix("/v1beta") {
-        format!("{root}/v1/images/{method}")
-    } else if base.ends_with("/v1") {
-        format!("{base}/images/{method}")
-    } else {
-        format!("{base}/v1/images/{method}")
-    };
+    let endpoint = image_endpoint(base, method);
 
     let prompt = if prompt.trim().is_empty() {
         "Use the attached image as reference."
@@ -582,6 +619,161 @@ async fn generate_openai_image(
         .text()
         .await
         .map_err(|e| format!("read image response body: {e}"))?;
+
+    if !status.is_success() {
+        if let Some(msg) = extract_error_from_body(&text) {
+            return Err(format!("API error: {msg}"));
+        }
+        return Err(format!("HTTP {status}: {text}"));
+    }
+    if let Some(msg) = extract_error_from_body(&text) {
+        return Err(format!("API error: {msg}"));
+    }
+
+    Ok(ImageGenResponse {
+        url: image_response_url_from_text(&text)?,
+    })
+}
+
+async fn generate_xai_image(
+    client: &reqwest::Client,
+    cancel: Arc<Notify>,
+    base_url: &str,
+    key: &str,
+    model: &str,
+    prompt: &str,
+    attachments: &[Attachment],
+    params: &serde_json::Map<String, serde_json::Value>,
+) -> Result<ImageGenResponse, String> {
+    const XAI_IMG_STRIP: &[&str] = &[
+        "max_tokens",
+        "max_completion_tokens",
+        "temperature",
+        "top_p",
+        "frequency_penalty",
+        "presence_penalty",
+        "logprobs",
+        "top_logprobs",
+        "stream",
+        "stop",
+        "stream_options",
+        "quality",
+        "size",
+        "style",
+    ];
+
+    let image = attachments.iter().find(|att| att.mime_type.starts_with("image/"));
+    let method = if image.is_some() { "edits" } else { "generations" };
+    let endpoint = image_endpoint(base_url, method);
+    let prompt = image_prompt_with_file_context(prompt, attachments);
+    let mut body: serde_json::Map<String, serde_json::Value> = params
+        .iter()
+        .filter(|(k, _)| !XAI_IMG_STRIP.contains(&k.as_str()))
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    body.insert("model".into(), json!(model));
+    body.insert("prompt".into(), json!(prompt));
+
+    if let Some(att) = image {
+        body.insert(
+            "image".into(),
+            json!({
+                "type": "image_url",
+                "url": format!("data:{};base64,{}", att.mime_type, att.data),
+            }),
+        );
+    }
+
+    let mut req = client.post(&endpoint).json(&body);
+    if !key.is_empty() {
+        req = req.bearer_auth(key);
+    }
+
+    let resp = tokio::select! {
+        biased;
+        _ = cancel.notified() => return Err("generation cancelled".to_string()),
+        r = req.send() => r.map_err(|e| format!("xAI image request failed: {e}"))?,
+    };
+    let status = resp.status();
+    let text = resp
+        .text()
+        .await
+        .map_err(|e| format!("read xAI image response body: {e}"))?;
+
+    if !status.is_success() {
+        if let Some(msg) = extract_error_from_body(&text) {
+            return Err(format!("API error: {msg}"));
+        }
+        return Err(format!("HTTP {status}: {text}"));
+    }
+    if let Some(msg) = extract_error_from_body(&text) {
+        return Err(format!("API error: {msg}"));
+    }
+
+    Ok(ImageGenResponse {
+        url: image_response_url_from_text(&text)?,
+    })
+}
+
+async fn generate_glm_image(
+    client: &reqwest::Client,
+    cancel: Arc<Notify>,
+    base_url: &str,
+    key: &str,
+    model: &str,
+    prompt: &str,
+    attachments: &[Attachment],
+    params: &serde_json::Map<String, serde_json::Value>,
+) -> Result<ImageGenResponse, String> {
+    if attachments.iter().any(|att| att.mime_type.starts_with("image/")) {
+        return Err(
+            "Image references/edits are not supported by the GLM image API. Use GLM vision models in chat mode for image understanding."
+                .to_string(),
+        );
+    }
+
+    const GLM_IMG_STRIP: &[&str] = &[
+        "max_tokens",
+        "max_completion_tokens",
+        "temperature",
+        "top_p",
+        "frequency_penalty",
+        "presence_penalty",
+        "logprobs",
+        "top_logprobs",
+        "stream",
+        "stop",
+        "stream_options",
+        "style",
+        "background",
+        "response_format",
+    ];
+
+    let endpoint = format!("{}/images/generations", base_url.trim_end_matches('/'));
+    let prompt = image_prompt_with_file_context(prompt, attachments);
+    let mut body: serde_json::Map<String, serde_json::Value> = params
+        .iter()
+        .filter(|(k, _)| !GLM_IMG_STRIP.contains(&k.as_str()))
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    body.insert("model".into(), json!(model));
+    body.insert("prompt".into(), json!(prompt));
+
+    let mut req = client.post(&endpoint).json(&body);
+    if !key.is_empty() {
+        req = req.bearer_auth(key);
+    }
+
+    let resp = tokio::select! {
+        biased;
+        _ = cancel.notified() => return Err("generation cancelled".to_string()),
+        r = req.send() => r.map_err(|e| format!("GLM image request failed: {e}"))?,
+    };
+    let status = resp.status();
+    let text = resp
+        .text()
+        .await
+        .map_err(|e| format!("read GLM image response body: {e}"))?;
 
     if !status.is_success() {
         if let Some(msg) = extract_error_from_body(&text) {
@@ -826,6 +1018,10 @@ pub async fn generate_image(
             Err("Image generation is not supported for Anthropic".to_string())
         }
 
+        ProxyKind::TextCompletions => {
+            Err("Image generation is not supported for Text completions".to_string())
+        }
+
         ProxyKind::OpenRouter => {
             generate_openrouter_image(
                 cancel.clone(),
@@ -838,6 +1034,48 @@ pub async fn generate_image(
             )
             .await
         }
+
+        ProxyKind::Grok => {
+            generate_xai_image(
+                &client,
+                cancel.clone(),
+                &proxy.base_url,
+                &proxy.key,
+                &input.model,
+                &input.prompt,
+                &input.attachments,
+                &input.params,
+            )
+            .await
+        }
+
+        ProxyKind::Glm => {
+            generate_glm_image(
+                &client,
+                cancel.clone(),
+                &proxy.base_url,
+                &proxy.key,
+                &input.model,
+                &input.prompt,
+                &input.attachments,
+                &input.params,
+            )
+            .await
+        }
+
+        ProxyKind::Deepseek => {
+            Err("Image generation is not supported by the official DeepSeek API".to_string())
+        }
+
+        ProxyKind::Mistral => Err(
+            "Mistral image generation uses the Mistral Agents/Conversations image_generation tool and is not supported by Scarlet image mode yet"
+                .to_string(),
+        ),
+
+        ProxyKind::Moonshot => Err(
+            "Image generation is not supported by the official Moonshot/Kimi API; use Kimi vision models in chat mode for image understanding"
+                .to_string(),
+        ),
 
         _ => {
             generate_openai_image(

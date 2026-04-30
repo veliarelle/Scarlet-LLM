@@ -3,6 +3,12 @@ export type ProxyKind =
   | "anthropic_native"
   | "google_native"
   | "openai_responses"
+  | "text_completions"
+  | "grok"
+  | "glm"
+  | "deepseek"
+  | "mistral"
+  | "moonshot"
   | "openrouter";
 
 export interface Proxy {
@@ -26,5 +32,11 @@ export const PROXY_KIND_LABELS: Record<ProxyKind, string> = {
   anthropic_native: "Anthropic native",
   google_native: "Google native",
   openai_responses: "OpenAI Responses API",
+  text_completions: "Text completions",
+  grok: "Grok / xAI",
+  glm: "GLM / Z.AI",
+  deepseek: "DeepSeek",
+  mistral: "Mistral",
+  moonshot: "Moonshot / Kimi",
   openrouter: "OpenRouter",
 };

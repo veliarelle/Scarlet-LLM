@@ -165,6 +165,12 @@ pub enum ProxyKind {
     AnthropicNative,
     GoogleNative,
     OpenaiResponses,
+    TextCompletions,
+    Grok,
+    Glm,
+    Deepseek,
+    Mistral,
+    Moonshot,
     #[serde(rename = "openrouter")]
     OpenRouter,
 }

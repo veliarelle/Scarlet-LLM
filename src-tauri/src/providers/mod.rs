@@ -3,6 +3,7 @@ pub mod google;
 pub mod openai;
 pub mod openrouter;
 pub mod responses;
+pub mod text;
 
 use crate::types::{ChatMessage, CompletionResponse, Model, ProxyKind, TokenUsage};
 use async_trait::async_trait;
@@ -47,7 +48,19 @@ pub trait Provider: Send + Sync {
 
 pub fn provider_for(kind: &ProxyKind) -> Box<dyn Provider> {
     match kind {
-        ProxyKind::OpenaiCompat => Box::new(openai::OpenAiProvider),
+        ProxyKind::OpenaiCompat => Box::new(openai::OpenAiProvider::default()),
+        ProxyKind::Grok => Box::new(openai::OpenAiProvider::with_fallback(openai::GROK_MODELS)),
+        ProxyKind::Glm => Box::new(openai::OpenAiProvider::with_fallback(openai::GLM_MODELS)),
+        ProxyKind::Deepseek => Box::new(openai::OpenAiProvider::with_fallback(
+            openai::DEEPSEEK_MODELS,
+        )),
+        ProxyKind::Mistral => Box::new(openai::OpenAiProvider::with_fallback(
+            openai::MISTRAL_MODELS,
+        )),
+        ProxyKind::Moonshot => Box::new(openai::OpenAiProvider::with_fallback(
+            openai::MOONSHOT_MODELS,
+        )),
+        ProxyKind::TextCompletions => Box::new(text::TextCompletionsProvider),
         ProxyKind::OpenaiResponses => Box::new(responses::ResponsesProvider),
         ProxyKind::OpenRouter => Box::new(openrouter::OpenRouterProvider),
         ProxyKind::AnthropicNative => Box::new(anthropic::AnthropicProvider),

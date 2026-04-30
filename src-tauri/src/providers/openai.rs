@@ -9,7 +9,62 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 use tokio::sync::Notify;
 
-pub struct OpenAiProvider;
+pub const GROK_MODELS: &[(&str, &str)] = &[
+    ("grok-imagine-image", "Grok Imagine Image"),
+    ("grok-2-image", "Grok 2 Image"),
+    ("grok-4.20-reasoning", "Grok 4.20 Reasoning"),
+    ("grok-4", "Grok 4"),
+    ("grok-3", "Grok 3"),
+];
+
+pub const GLM_MODELS: &[(&str, &str)] = &[
+    ("glm-image", "GLM-Image"),
+    ("cogview-4-250304", "CogView-4"),
+    ("glm-5.1", "GLM-5.1"),
+    ("glm-5-turbo", "GLM-5 Turbo"),
+    ("glm-5", "GLM-5"),
+    ("glm-4.7", "GLM-4.7"),
+    ("glm-4.6", "GLM-4.6"),
+    ("glm-4.5", "GLM-4.5"),
+    ("glm-4.5-flash", "GLM-4.5 Flash"),
+];
+
+pub const DEEPSEEK_MODELS: &[(&str, &str)] = &[
+    ("deepseek-v4-flash", "DeepSeek V4 Flash"),
+    ("deepseek-v4-pro", "DeepSeek V4 Pro"),
+    ("deepseek-chat", "DeepSeek Chat"),
+    ("deepseek-reasoner", "DeepSeek Reasoner"),
+];
+
+pub const MISTRAL_MODELS: &[(&str, &str)] = &[
+    ("mistral-large-latest", "Mistral Large"),
+    ("mistral-medium-latest", "Mistral Medium"),
+    ("mistral-small-latest", "Mistral Small"),
+    ("codestral-latest", "Codestral"),
+    ("ministral-8b-latest", "Ministral 8B"),
+    ("ministral-3b-latest", "Ministral 3B"),
+];
+
+pub const MOONSHOT_MODELS: &[(&str, &str)] = &[
+    ("kimi-k2.5", "Kimi K2.5"),
+    ("kimi-k2-turbo-preview", "Kimi K2 Turbo"),
+    ("kimi-k2-thinking", "Kimi K2 Thinking"),
+    ("kimi-k2-thinking-turbo", "Kimi K2 Thinking Turbo"),
+    ("moonshot-v1-8k", "Moonshot v1 8K"),
+    ("moonshot-v1-32k", "Moonshot v1 32K"),
+    ("moonshot-v1-128k", "Moonshot v1 128K"),
+];
+
+#[derive(Default)]
+pub struct OpenAiProvider {
+    fallback_models: &'static [(&'static str, &'static str)],
+}
+
+impl OpenAiProvider {
+    pub fn with_fallback(fallback_models: &'static [(&'static str, &'static str)]) -> Self {
+        Self { fallback_models }
+    }
+}
 
 #[derive(Debug, Deserialize)]
 struct ModelsResp {
@@ -38,7 +93,7 @@ struct Choice {
 #[derive(Debug, Deserialize)]
 struct ChatMessageWire {
     #[serde(default)]
-    content: Option<String>,
+    content: Option<Value>,
     #[serde(default)]
     tool_calls: Vec<ToolCallWire>,
 }
@@ -53,7 +108,7 @@ struct ToolCallWire {
 struct ToolCallFunctionWire {
     name: String,
     #[serde(default)]
-    arguments: String,
+    arguments: Value,
 }
 
 #[derive(Debug, Deserialize)]
@@ -88,6 +143,45 @@ struct StreamDelta {
 
 fn supports_openai_prompt_cache_controls(base_url: &str) -> bool {
     base_url.contains("api.openai.com")
+}
+
+fn should_use_max_completion_tokens(base_url: &str) -> bool {
+    base_url.contains("api.openai.com")
+}
+
+fn content_value_to_string(content: Option<Value>) -> String {
+    match content {
+        Some(Value::String(s)) => s,
+        Some(Value::Array(parts)) => parts
+            .into_iter()
+            .filter_map(|part| {
+                part.get("text")
+                    .and_then(Value::as_str)
+                    .or_else(|| part.get("content").and_then(Value::as_str))
+                    .map(ToString::to_string)
+            })
+            .collect::<Vec<_>>()
+            .join(""),
+        Some(other) => other.as_str().unwrap_or_default().to_string(),
+        None => String::new(),
+    }
+}
+
+fn arguments_to_string(arguments: Value) -> String {
+    match arguments {
+        Value::String(s) => s,
+        other => other.to_string(),
+    }
+}
+
+fn fallback_models(models: &'static [(&'static str, &'static str)]) -> Vec<Model> {
+    models
+        .iter()
+        .map(|(id, name)| Model {
+            id: (*id).to_string(),
+            name: Some((*name).to_string()),
+        })
+        .collect()
 }
 
 fn prompt_cache_key(model: &str) -> String {
@@ -128,7 +222,10 @@ fn normalize_file_part(part: &Value) -> Value {
     let Some(data) = source.get("data").and_then(Value::as_str) else {
         return part.clone();
     };
-    let name = part.get("name").and_then(Value::as_str).unwrap_or("attachment");
+    let name = part
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or("attachment");
 
     if media_type != "application/pdf" {
         return file_part_as_text(name, media_type, data);
@@ -244,8 +341,7 @@ fn build_body(
         );
     }
     for (k, v) in &req.params {
-        // Official OpenAI API (gpt-4.1, o1, o3, etc.) uses max_completion_tokens
-        let key = if k == "max_tokens" {
+        let key = if k == "max_tokens" && should_use_max_completion_tokens(base_url) {
             "max_completion_tokens"
         } else {
             k.as_str()
@@ -271,20 +367,35 @@ impl Provider for OpenAiProvider {
         if !key.is_empty() {
             req = req.bearer_auth(key);
         }
-        let resp = req
-            .send()
-            .await
-            .map_err(|e| format!("request failed: {e}"))?;
+        let resp = match req.send().await {
+            Ok(resp) => resp,
+            Err(e) => {
+                if !self.fallback_models.is_empty() {
+                    return Ok(fallback_models(self.fallback_models));
+                }
+                return Err(format!("request failed: {e}"));
+            }
+        };
         let status = resp.status();
         let text = resp
             .text()
             .await
             .map_err(|e| format!("read body failed: {e}"))?;
         if !status.is_success() {
+            if !self.fallback_models.is_empty() {
+                return Ok(fallback_models(self.fallback_models));
+            }
             return Err(format!("HTTP {status}: {text}"));
         }
-        let parsed: ModelsResp = serde_json::from_str(&text)
-            .map_err(|e| format!("parse models response: {e}; body={text}"))?;
+        let parsed: ModelsResp = match serde_json::from_str(&text) {
+            Ok(parsed) => parsed,
+            Err(e) => {
+                if !self.fallback_models.is_empty() {
+                    return Ok(fallback_models(self.fallback_models));
+                }
+                return Err(format!("parse models response: {e}; body={text}"));
+            }
+        };
         Ok(parsed
             .data
             .into_iter()
@@ -322,15 +433,8 @@ impl Provider for OpenAiProvider {
         }
         let parsed: ChatResp = serde_json::from_str(&text)
             .map_err(|e| format!("parse completion response: {e}; body={text}"))?;
-        let message = parsed
-            .choices
-            .into_iter()
-            .next()
-            .map(|c| c.message);
-        let content = message
-            .as_ref()
-            .and_then(|m| m.content.clone())
-            .unwrap_or_default();
+        let message = parsed.choices.into_iter().next().map(|c| c.message);
+        let content = content_value_to_string(message.as_ref().and_then(|m| m.content.clone()));
         let tool_calls = message
             .map(|m| {
                 m.tool_calls
@@ -338,7 +442,7 @@ impl Provider for OpenAiProvider {
                     .map(|call| ToolCall {
                         id: call.id,
                         name: call.function.name,
-                        arguments: call.function.arguments,
+                        arguments: arguments_to_string(call.function.arguments),
                     })
                     .collect()
             })

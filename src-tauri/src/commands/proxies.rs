@@ -20,6 +20,12 @@ fn default_base_url(kind: &ProxyKind) -> &'static str {
         ProxyKind::AnthropicNative => "https://api.anthropic.com",
         ProxyKind::GoogleNative => "https://generativelanguage.googleapis.com",
         ProxyKind::OpenRouter => "https://openrouter.ai/api/v1",
+        ProxyKind::TextCompletions => "http://localhost:5000/v1",
+        ProxyKind::Grok => "https://api.x.ai/v1",
+        ProxyKind::Glm => "https://api.z.ai/api/paas/v4",
+        ProxyKind::Deepseek => "https://api.deepseek.com",
+        ProxyKind::Mistral => "https://api.mistral.ai/v1",
+        ProxyKind::Moonshot => "https://api.moonshot.ai/v1",
     }
 }
 

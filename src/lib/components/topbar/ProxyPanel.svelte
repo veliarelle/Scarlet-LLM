@@ -18,6 +18,12 @@
     anthropic_native: "https://api.anthropic.com",
     google_native: "https://generativelanguage.googleapis.com",
     openai_responses: "https://api.openai.com/v1",
+    text_completions: "http://localhost:5000/v1",
+    grok: "https://api.x.ai/v1",
+    glm: "https://api.z.ai/api/paas/v4",
+    deepseek: "https://api.deepseek.com",
+    mistral: "https://api.mistral.ai/v1",
+    moonshot: "https://api.moonshot.ai/v1",
     openrouter: "https://openrouter.ai/api/v1",
   };
 
