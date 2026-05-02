@@ -363,6 +363,10 @@ pub struct Settings {
     pub user_name: String,
     #[serde(default = "default_assistant_name")]
     pub assistant_name: String,
+    #[serde(default = "default_show_user_name")]
+    pub show_user_name: bool,
+    #[serde(default = "default_show_assistant_name")]
+    pub show_assistant_name: bool,
 
     #[serde(default = "default_streaming")]
     pub streaming: bool,
@@ -374,6 +378,10 @@ pub struct Settings {
     pub max_message_size: u32,
     #[serde(default)]
     pub show_token_counts: bool,
+    #[serde(default = "default_show_message_models")]
+    pub show_message_models: bool,
+    #[serde(default = "default_show_message_time")]
+    pub show_message_time: bool,
     #[serde(default)]
     pub prompt_caching: bool,
 
@@ -405,6 +413,12 @@ pub struct Settings {
 
     #[serde(default = "default_ui_scale")]
     pub ui_scale: f32,
+    #[serde(default = "default_text_scale")]
+    pub text_scale: f32,
+    #[serde(default = "default_user_bubbles")]
+    pub user_bubbles: bool,
+    #[serde(default = "default_assistant_bubbles")]
+    pub assistant_bubbles: bool,
 
     #[serde(default)]
     pub translucent_sidebar: bool,
@@ -430,11 +444,15 @@ impl Default for Settings {
             active_chat_id: None,
             user_name: default_user_name(),
             assistant_name: default_assistant_name(),
+            show_user_name: default_show_user_name(),
+            show_assistant_name: default_show_assistant_name(),
             streaming: default_streaming(),
             context_window: default_context_window(),
             max_tokens: default_max_tokens(),
             max_message_size: default_max_message_size(),
             show_token_counts: false,
+            show_message_models: default_show_message_models(),
+            show_message_time: default_show_message_time(),
             prompt_caching: false,
             params: default_params(),
             reasoning: ReasoningConfig::default(),
@@ -447,6 +465,9 @@ impl Default for Settings {
             theme: default_theme(),
             custom_colors: std::collections::BTreeMap::new(),
             ui_scale: default_ui_scale(),
+            text_scale: default_text_scale(),
+            user_bubbles: default_user_bubbles(),
+            assistant_bubbles: default_assistant_bubbles(),
             translucent_sidebar: false,
             sidebar_blur: default_bar_blur(),
             translucent_topbar: false,
@@ -458,6 +479,21 @@ impl Default for Settings {
 
 fn default_ui_scale() -> f32 {
     1.0
+}
+fn default_text_scale() -> f32 {
+    1.0
+}
+fn default_assistant_bubbles() -> bool {
+    true
+}
+fn default_user_bubbles() -> bool {
+    true
+}
+fn default_show_message_models() -> bool {
+    true
+}
+fn default_show_message_time() -> bool {
+    true
 }
 fn default_language() -> String {
     "ru".to_string()
@@ -471,6 +507,12 @@ fn default_user_name() -> String {
 }
 fn default_assistant_name() -> String {
     "Scarlet".to_string()
+}
+fn default_show_user_name() -> bool {
+    true
+}
+fn default_show_assistant_name() -> bool {
+    true
 }
 fn default_streaming() -> bool {
     true

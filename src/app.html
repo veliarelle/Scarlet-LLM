@@ -46,17 +46,22 @@
       }
 
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-      html, body { height: 100%; overflow: hidden; }
+      html {
+        height: 100%;
+        overflow: hidden;
+        font-size: calc(15px * var(--text-scale, 1));
+      }
+      body { height: 100%; overflow: hidden; }
       body {
         font-family: 'DM Sans', system-ui, sans-serif;
         background: var(--bg);
         color: var(--text);
-        font-size: 15px;
+        font-size: 1rem;
         line-height: 1.65;
         transition: background .2s, color .2s;
       }
       @media (max-width: 599px) {
-        body { font-size: 14px; }
+        html { font-size: calc(14px * var(--text-scale, 1)); }
       }
       button { background: none; border: none; cursor: pointer; color: inherit; font-family: inherit; font-size: inherit; }
       input, textarea, select { font-family: inherit; font-size: inherit; color: inherit; background: none; border: none; outline: none; }

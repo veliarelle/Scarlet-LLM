@@ -48,7 +48,12 @@ function inlineMd(t: string): string {
 
 const FENCE_RE = /^(\s*)```(.*)$/;
 
-export function renderMarkdown(text: string): string {
+export function renderMarkdown(
+  text: string,
+  labels: { copy?: string; copied?: string } = {}
+): string {
+  const copyLabel = escAttr(labels.copy ?? "Copy");
+  const copiedLabel = escAttr(labels.copied ?? "Copied");
   const lines = text.split("\n");
   const out: string[] = [];
   let inCode = false;
@@ -72,7 +77,7 @@ export function renderMarkdown(text: string): string {
   const closeCode = () => {
     const safeLang = sanitizeLang(lang);
     out.push(
-      `<pre class="sl-codeblock"><code class="lang-${safeLang}">${escH(codeLines.join("\n"))}</code></pre>`
+      `<div class="sl-codewrap"><button type="button" class="sl-code-copy" title="${copyLabel}" aria-label="${copyLabel}" data-copy-label="${copyLabel}" data-copied-label="${copiedLabel}"><span class="sl-copy-icon" aria-hidden="true"></span></button><pre class="sl-codeblock"><code class="lang-${safeLang}">${escH(codeLines.join("\n"))}</code></pre></div>`
     );
     codeLines = [];
     inCode = false;

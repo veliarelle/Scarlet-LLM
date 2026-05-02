@@ -467,7 +467,7 @@
     background: var(--bg-3);
     border: 1px solid var(--border);
     color: var(--text-2);
-    font-size: 13px;
+    font-size: 0.867rem;
     width: 100%;
   }
   .selector-btn:hover {
@@ -498,7 +498,7 @@
   }
   .dropdown-group {
     padding: 6px 10px 4px;
-    font-size: 11px;
+    font-size: 0.733rem;
     color: var(--text-3);
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -516,7 +516,7 @@
     padding: 4px 6px 4px 10px;
     border-radius: 7px;
     color: var(--text-2);
-    font-size: 13px;
+    font-size: 0.867rem;
     transition: background 0.1s;
   }
   .dropdown-item:hover {
@@ -553,7 +553,7 @@
   .empty {
     padding: 8px 10px;
     color: var(--text-3);
-    font-size: 12px;
+    font-size: 0.8rem;
   }
   .save-row {
     padding: 6px;
@@ -632,13 +632,13 @@
   }
   .name {
     flex: 1;
-    font-size: 13px;
+    font-size: 0.867rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .role-badge {
-    font-size: 10px;
+    font-size: 0.667rem;
     text-transform: uppercase;
     letter-spacing: 0.07em;
     padding: 2px 7px;
@@ -684,7 +684,7 @@
     border-radius: 7px;
     padding: 6px 10px;
     color: var(--text);
-    font-size: 13px;
+    font-size: 0.867rem;
     width: 100%;
   }
   .text-input:focus {
@@ -707,7 +707,7 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 8px 10px;
-    font-size: 13px;
+    font-size: 0.867rem;
     line-height: 1.5;
     color: var(--text);
     min-height: 110px;
@@ -724,7 +724,7 @@
     gap: 8px;
     padding: 10px;
     border-radius: 10px;
-    font-size: 13px;
+    font-size: 0.867rem;
     background: none;
     border: 1.5px dashed var(--border);
     color: var(--text-3);
@@ -743,7 +743,7 @@
     padding-top: 6px;
   }
   .section-title {
-    font-size: 11px;
+    font-size: 0.733rem;
     color: var(--text-3);
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -764,13 +764,13 @@
     gap: 10px;
   }
   .utility-name {
-    font-size: 13px;
+    font-size: 0.867rem;
     color: var(--text);
     font-weight: 600;
   }
   .utility-hint {
     margin-top: 3px;
-    font-size: 12px;
+    font-size: 0.8rem;
     color: var(--text-3);
     line-height: 1.4;
   }
@@ -797,7 +797,7 @@
     border-radius: 7px;
     background: var(--bg-4);
     color: var(--text-2);
-    font-size: 12px;
+    font-size: 0.8rem;
   }
   .restore-btn:hover {
     color: var(--text);

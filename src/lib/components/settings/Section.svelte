@@ -16,7 +16,7 @@
     gap: 9px;
   }
   .section-title {
-    font-size: 10px;
+    font-size: 0.667rem;
     text-transform: uppercase;
     letter-spacing: 0.1em;
     color: var(--text-3);

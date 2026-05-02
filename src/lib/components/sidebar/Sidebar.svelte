@@ -331,7 +331,7 @@
     flex-shrink: 0;
   }
   .logo {
-    font-size: 15px;
+    font-size: 1rem;
     font-weight: 700;
     letter-spacing: 0.02em;
     color: var(--accent);
@@ -378,7 +378,7 @@
   }
   .search-input {
     flex: 1;
-    font-size: 13px;
+    font-size: 0.867rem;
   }
   .search-input::placeholder {
     color: var(--text-3);
@@ -394,7 +394,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 13px;
+    font-size: 0.867rem;
     flex-shrink: 0;
     transition: background 0.12s, color 0.12s;
   }
@@ -409,7 +409,7 @@
     padding: 2px 8px 12px;
   }
   .group-label {
-    font-size: 10px;
+    font-size: 0.667rem;
     color: var(--text-3);
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -417,7 +417,7 @@
   }
   .chat-empty {
     color: var(--text-3);
-    font-size: 13px;
+    font-size: 0.867rem;
     padding: 16px 8px;
     text-align: center;
   }
@@ -448,7 +448,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 13px;
+    font-size: 0.867rem;
     color: var(--text-2);
   }
   .chat-item.active .chat-title {
@@ -468,7 +468,7 @@
     background: var(--bg-4);
     border-radius: 4px;
     padding: 1px 6px;
-    font-size: 13px;
+    font-size: 0.867rem;
     border: 1px solid var(--border);
     color: var(--text);
   }
@@ -491,7 +491,7 @@
     padding: 8px 12px;
     border-radius: 6px;
     color: var(--text-2);
-    font-size: 13px;
+    font-size: 0.867rem;
     transition: background 0.1s;
   }
   .context-menu button:hover {

@@ -84,7 +84,7 @@
     align-items: center;
     gap: 10px;
     color: var(--text-3);
-    font-size: 12px;
+    font-size: 0.8rem;
   }
   .summary-line:hover {
     color: var(--text-2);
@@ -113,12 +113,12 @@
   }
   .summary-note {
     color: var(--text-3);
-    font-size: 12px;
+    font-size: 0.8rem;
     line-height: 1.45;
   }
   .prompt-label {
     color: var(--text-3);
-    font-size: 11px;
+    font-size: 0.733rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
   }
@@ -130,7 +130,7 @@
     border-radius: 8px;
     padding: 9px 10px;
     color: var(--text-2);
-    font-size: 13px;
+    font-size: 0.867rem;
     line-height: 1.55;
     white-space: pre-wrap;
     word-break: break-word;
@@ -159,7 +159,7 @@
     border-radius: 8px;
     background: var(--bg-4);
     color: var(--text-2);
-    font-size: 12px;
+    font-size: 0.8rem;
   }
   .action-btn:hover:not(:disabled) {
     color: var(--text);

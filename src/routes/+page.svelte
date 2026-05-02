@@ -16,8 +16,23 @@
     if (!Number.isFinite(raw)) return 1;
     return Math.min(1.5, Math.max(0.75, raw));
   }
+  function textScale(): number {
+    const raw = Number($settings.text_scale ?? 1);
+    if (!Number.isFinite(raw)) return 1;
+    return Math.min(1.5, Math.max(0.75, raw));
+  }
 
   const scaleValue = $derived(String(uiScale()));
+
+  function syncVisualViewport() {
+    if (typeof document === "undefined" || typeof window === "undefined") return;
+    const root = document.documentElement;
+    const vv = window.visualViewport;
+    root.style.setProperty("--visual-vw", `${vv?.width ?? window.innerWidth}px`);
+    root.style.setProperty("--visual-vh", `${vv?.height ?? window.innerHeight}px`);
+    root.style.setProperty("--visual-top", `${vv?.offsetTop ?? 0}px`);
+    root.style.setProperty("--visual-left", `${vv?.offsetLeft ?? 0}px`);
+  }
 
   // Применяем тему + кастомные цвета + ui_scale + translucency
   $effect(() => {
@@ -36,6 +51,7 @@
     }
 
     root.style.setProperty("--ui-scale", String($settings.ui_scale ?? 1));
+    root.style.setProperty("--text-scale", String(textScale()));
 
     // Translucency сайдбара/топбара — выставляем CSS-переменные,
     // которые потребляют компоненты Sidebar/TopBar.
@@ -62,6 +78,10 @@
   });
 
   onMount(() => {
+    syncVisualViewport();
+    window.addEventListener("resize", syncVisualViewport);
+    window.visualViewport?.addEventListener("resize", syncVisualViewport);
+    window.visualViewport?.addEventListener("scroll", syncVisualViewport);
     void (async () => {
       // Применяем фон ДО загрузки настроек, чтобы изображение было видно
       // сразу после старта приложения (загружается из localStorage).
@@ -79,6 +99,11 @@
         }
       }
     })();
+    return () => {
+      window.removeEventListener("resize", syncVisualViewport);
+      window.visualViewport?.removeEventListener("resize", syncVisualViewport);
+      window.visualViewport?.removeEventListener("scroll", syncVisualViewport);
+    };
   });
 </script>
 
@@ -107,19 +132,18 @@
 <style>
   .viewport {
     position: fixed;
-    inset: 0;
+    top: var(--visual-top, 0px);
+    left: var(--visual-left, 0px);
     z-index: 1;
-    width: 100vw;
-    height: 100vh;
-    height: 100dvh;
+    width: var(--visual-vw, 100vw);
+    height: var(--visual-vh, 100dvh);
     overflow: hidden;
   }
   .app-scale {
     position: absolute;
     inset: 0;
-    width: calc(100vw / var(--app-scale));
-    height: calc(100vh / var(--app-scale));
-    height: calc(100dvh / var(--app-scale));
+    width: calc(var(--visual-vw, 100vw) / var(--app-scale));
+    height: calc(var(--visual-vh, 100dvh) / var(--app-scale));
     overflow: hidden;
     transform: scale(var(--app-scale));
     transform-origin: top left;
@@ -128,9 +152,8 @@
     position: absolute;
     inset: 0;
     z-index: 500;
-    width: calc(100vw / var(--app-scale));
-    height: calc(100vh / var(--app-scale));
-    height: calc(100dvh / var(--app-scale));
+    width: calc(var(--visual-vw, 100vw) / var(--app-scale));
+    height: calc(var(--visual-vh, 100dvh) / var(--app-scale));
     pointer-events: none;
     transform: scale(var(--app-scale));
     transform-origin: top left;

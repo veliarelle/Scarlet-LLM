@@ -458,7 +458,7 @@
 
 <style>
   .hint {
-    font-size: 11px;
+    font-size: 0.733rem;
     color: var(--text-3);
     line-height: 1.4;
   }
@@ -489,7 +489,7 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     color: var(--text);
-    font-size: 12px;
+    font-size: 0.8rem;
   }
   .ellipsis {
     min-width: 0;
@@ -535,7 +535,7 @@
   .dropdown-group {
     padding: 6px 8px;
     color: var(--text-3);
-    font-size: 10px;
+    font-size: 0.667rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -549,7 +549,7 @@
     padding: 4px 7px;
     border-radius: 6px;
     color: var(--text-2);
-    font-size: 12px;
+    font-size: 0.8rem;
   }
   .dropdown-item.active,
   .dropdown-item:hover {
@@ -585,7 +585,7 @@
   .empty {
     padding: 8px;
     color: var(--text-3);
-    font-size: 12px;
+    font-size: 0.8rem;
   }
   .save-row {
     display: flex;
@@ -602,7 +602,7 @@
     background: var(--bg-3);
     border: 1px solid var(--border);
     color: var(--text);
-    font-size: 12px;
+    font-size: 0.8rem;
   }
   .save-btn {
     width: 30px;
@@ -629,13 +629,13 @@
   }
   .inline-title {
     color: var(--text-2);
-    font-size: 12px;
+    font-size: 0.8rem;
     font-weight: 650;
   }
   .action-btn {
     padding: 4px 10px;
     border-radius: 6px;
-    font-size: 12px;
+    font-size: 0.8rem;
     background: var(--bg-3);
     border: 1px dashed var(--border);
     color: var(--text-3);
@@ -652,7 +652,7 @@
     border-radius: 8px;
     padding: 10px 12px;
     font-family: "JetBrains Mono", monospace;
-    font-size: 12px;
+    font-size: 0.8rem;
     color: var(--text);
     line-height: 1.5;
     resize: vertical;
@@ -662,7 +662,7 @@
     border-color: var(--accent-d);
   }
   .error {
-    font-size: 11px;
+    font-size: 0.733rem;
     color: var(--danger);
   }
   .agents-list {
@@ -692,7 +692,7 @@
     gap: 6px;
     min-width: 0;
     color: var(--text);
-    font-size: 13px;
+    font-size: 0.867rem;
     font-weight: 650;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -717,14 +717,14 @@
     background: transparent;
     border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border));
     color: var(--danger);
-    font-size: 11px;
+    font-size: 0.733rem;
   }
   .field {
     display: flex;
     flex-direction: column;
     gap: 5px;
     color: var(--text-3);
-    font-size: 11px;
+    font-size: 0.733rem;
   }
   .field input,
   .agent-prompt {

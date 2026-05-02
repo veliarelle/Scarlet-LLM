@@ -64,6 +64,15 @@
   async function setUiScale(e: Event) {
     await settings.patch({ ui_scale: Number((e.target as HTMLInputElement).value) });
   }
+  async function setTextScale(e: Event) {
+    await settings.patch({ text_scale: Number((e.target as HTMLInputElement).value) });
+  }
+  async function setAssistantBubbles(v: boolean) {
+    await settings.patch({ assistant_bubbles: v });
+  }
+  async function setUserBubbles(v: boolean) {
+    await settings.patch({ user_bubbles: v });
+  }
 
   async function setColor(v: ColorVar, e: Event) {
     const value = (e.target as HTMLInputElement).value;
@@ -84,6 +93,16 @@
     if ($settings.theme === "light") return LIGHT_HEX[v];
     return DARK_HEX[v];
   }
+
+  const colorSuggestions = $derived(
+    Array.from(
+      new Set(
+        Object.values($settings.custom_colors)
+          .filter((value) => /^#[0-9a-fA-F]{6}$/.test(value))
+          .map((value) => value.toLowerCase())
+      )
+    )
+  );
 
   function uploadBg(e: Event) {
     const f = (e.target as HTMLInputElement).files?.[0];
@@ -175,6 +194,31 @@
         oninput={setUiScale}
       />
     </Row>
+    <Row label={$tr("appearance.textScale")} hint="{($settings.text_scale ?? 1).toFixed(2)}x">
+      <input
+        type="range"
+        class="range"
+        min="0.75"
+        max="1.5"
+        step="0.05"
+        value={$settings.text_scale ?? 1}
+        oninput={setTextScale}
+      />
+    </Row>
+    <Row label={$tr("appearance.assistantBubbles")}>
+      <Toggle
+        value={$settings.assistant_bubbles ?? true}
+        onChange={setAssistantBubbles}
+        label={$tr("appearance.assistantBubblesHint")}
+      />
+    </Row>
+    <Row label={$tr("appearance.userBubbles")}>
+      <Toggle
+        value={$settings.user_bubbles ?? true}
+        onChange={setUserBubbles}
+        label={$tr("appearance.userBubblesHint")}
+      />
+    </Row>
   </Section>
 
   {#if $settings.theme === "custom"}
@@ -182,12 +226,18 @@
       <p class="hint">
         {$tr("appearance.customHint")}
       </p>
+      <datalist id="scarlet-color-suggestions">
+        {#each colorSuggestions as value (value)}
+          <option value={value}></option>
+        {/each}
+      </datalist>
       <div class="color-grid">
         {#each COLOR_VARS as v (v)}
           <div class="color-row">
             <input
               type="color"
               class="picker"
+              list="scarlet-color-suggestions"
               value={colorValue(v)}
               oninput={(e) => setColor(v, e)}
               aria-label={VAR_LABELS[v]}

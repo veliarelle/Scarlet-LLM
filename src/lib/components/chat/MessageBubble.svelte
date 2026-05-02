@@ -36,6 +36,7 @@
     branchCount = 1,
     branchLocked = false,
     highlighted = false,
+    alwaysShowToolbar = false,
   }: {
     msg: Message;
     onEdit?: (content: string) => void;
@@ -52,6 +53,7 @@
     branchCount?: number;
     branchLocked?: boolean;
     highlighted?: boolean;
+    alwaysShowToolbar?: boolean;
   } = $props();
 
   let hovered = $state(false);
@@ -60,7 +62,6 @@
   let copied = $state(false);
   let deleteChoiceOpen = $state(false);
   let editAreaEl: HTMLTextAreaElement | undefined = $state();
-  let touchStartX: number | null = null;
   let viewerOpen = $state(false);
   let viewerSrc = $state("");
   let viewerAlt = $state("");
@@ -81,7 +82,7 @@
   });
 
   $effect(() => {
-    if (!hovered) deleteChoiceOpen = false;
+    if (!hovered && !alwaysShowToolbar) deleteChoiceOpen = false;
   });
 
   function autoResize() {
@@ -93,6 +94,11 @@
   const isUser = $derived(msg.role === "user");
   const isAssistant = $derived(msg.role === "assistant");
   const isEmptyAssistant = $derived(isAssistant && msg.content === "");
+  const assistantBubbles = $derived($settings.assistant_bubbles ?? true);
+  const userBubbles = $derived($settings.user_bubbles ?? true);
+  const anyBubbleDisabled = $derived(!assistantBubbles || !userBubbles);
+  const noAssistantBubble = $derived(isAssistant && !assistantBubbles);
+  const noUserBubble = $derived(isUser && !userBubbles);
 
   const branchIdx = $derived(Math.max(0, branchIndex));
   const branchTotal = $derived(Math.max(1, branchCount));
@@ -163,22 +169,6 @@
     } else if (e.key === "Escape") {
       editing = false;
     }
-  }
-
-  function onTouchStart(e: TouchEvent) {
-    if (branchLocked) return;
-    touchStartX = e.touches[0].clientX;
-  }
-  function onTouchEnd(e: TouchEvent) {
-    if (branchLocked || touchStartX === null) return;
-    const diff = e.changedTouches[0].clientX - touchStartX;
-    if (diff < -50) {
-      if (isAssistant && atLastBranch) onRegenerate?.();
-      else if (!atLastBranch) onNextBranch?.();
-    } else if (diff > 50 && !atFirstBranch) {
-      onPrevBranch?.();
-    }
-    touchStartX = null;
   }
 
   function clickNext() {
@@ -269,22 +259,36 @@
   class="msg-group"
   class:user={isUser}
   class:assistant={isAssistant}
+  class:no-assistant-bubble-mode={!assistantBubbles}
+  class:no-user-bubble-mode={!userBubbles}
+  class:any-bubble-disabled={anyBubbleDisabled}
   onmouseenter={() => (hovered = true)}
   onmouseleave={() => (hovered = false)}
-  ontouchstart={onTouchStart}
-  ontouchend={onTouchEnd}
   role="group"
 >
-  <div class="message" class:user={isUser} class:assistant={isAssistant} class:editing class:highlighted>
+  <div
+    class="message"
+    class:user={isUser}
+    class:assistant={isAssistant}
+    class:no-assistant-bubble={noAssistantBubble}
+    class:no-user-bubble={noUserBubble}
+    class:has-branches={branchTotal > 1}
+    class:editing
+    class:highlighted
+  >
     <div class="role-row">
-      <span class="role">{isUser ? $settings.user_name || $tr("message.userFallback") : $settings.assistant_name || "Scarlet"}</span>
-      {#if isAssistant && displayModel}
+      {#if (isUser && ($settings.show_user_name ?? true)) || (isAssistant && ($settings.show_assistant_name ?? true))}
+        <span class="role" class:role-tag={noAssistantBubble || noUserBubble}>{isUser ? $settings.user_name || $tr("message.userFallback") : $settings.assistant_name || "Scarlet"}</span>
+      {/if}
+      {#if isAssistant && ($settings.show_message_models ?? true) && displayModel}
         <span class="model-tag" title={displayModel}>{displayModel}</span>
       {/if}
       {#if isAssistant && $settings.show_token_counts && !isEmptyAssistant}
         <span class="token-tag" title={`${tokenCount} tokens`}>{tokenCount} tok</span>
       {/if}
-      <span class="time">{fmtTime(displayTime)}</span>
+      {#if $settings.show_message_time ?? true}
+        <span class="time" class:time-tag={noAssistantBubble || noUserBubble}>{fmtTime(displayTime)}</span>
+      {/if}
     </div>
 
     {#if editing}
@@ -376,7 +380,7 @@
     {/if}
 
     {#if !editing && !isEmptyAssistant}
-      <div class="toolbar" class:visible={hovered}>
+      <div class="toolbar" class:visible={hovered || alwaysShowToolbar}>
         <div class="toolbar-left">
           <button class="tb-btn" title={$tr("message.copy")} onclick={copy}>
             {#if copied}
@@ -483,7 +487,7 @@
   .msg-group {
     display: flex;
     flex-direction: column;
-    padding: 4px 0 40px;
+    padding: 4px 0 44px;
     position: relative;
     width: 100%;
   }
@@ -511,9 +515,38 @@
     background: var(--user-msg);
     color: var(--user-text);
     border-bottom-right-radius: 4px;
+    min-width: min(230px, 96%);
+  }
+  .message.user.has-branches {
+    min-width: min(330px, 96%);
   }
   .message.assistant {
+    min-width: min(360px, 98%);
+    width: min(1280px, 98%);
+    max-width: min(1280px, 98%);
     border-bottom-left-radius: 4px;
+  }
+  .message.no-assistant-bubble {
+    min-width: min(360px, 98%);
+    width: min(1280px, 98%);
+    max-width: min(1280px, 98%);
+    background: transparent;
+    border-radius: 0;
+    padding: 0;
+  }
+  .message.no-assistant-bubble .role-row {
+    align-items: baseline;
+    width: 100%;
+  }
+  .message.no-user-bubble {
+    background: transparent;
+    color: var(--text);
+    border-radius: 0;
+    padding: 0;
+  }
+  .message.no-user-bubble .role-row {
+    align-items: baseline;
+    width: 100%;
   }
   .message.editing {
     width: min(1000px, 96%);
@@ -537,7 +570,7 @@
     margin-bottom: 6px;
   }
   .role {
-    font-size: 12px;
+    font-size: 0.8rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -547,7 +580,7 @@
     color: rgba(255, 255, 255, 0.85);
   }
   .model-tag {
-    font-size: 11px;
+    font-size: 0.733rem;
     color: var(--text-2);
     font-family: "JetBrains Mono", monospace;
     padding: 2px 8px;
@@ -558,8 +591,38 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .role.role-tag,
+  .time.time-tag {
+    font-size: 0.733rem;
+    color: var(--text-2);
+    font-family: "JetBrains Mono", monospace;
+    padding: 2px 8px;
+    background: var(--bg-4);
+    border-radius: 5px;
+    letter-spacing: 0;
+    text-transform: none;
+    white-space: nowrap;
+  }
+  .message.no-assistant-bubble .role.role-tag,
+  .message.no-assistant-bubble .time.time-tag,
+  .message.no-assistant-bubble .model-tag,
+  .message.no-assistant-bubble .token-tag,
+  .message.no-user-bubble .role.role-tag,
+  .message.no-user-bubble .time.time-tag {
+    padding: 0;
+    background: transparent;
+    border-radius: 0;
+  }
+  .message.no-assistant-bubble .role.role-tag,
+  .message.no-user-bubble .role.role-tag {
+    font-size: 0.8rem;
+    font-family: inherit;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
   .token-tag {
-    font-size: 11px;
+    font-size: 0.733rem;
     color: var(--text-3);
     font-family: "JetBrains Mono", monospace;
     padding: 2px 7px;
@@ -573,9 +636,19 @@
   }
   .time {
     margin-left: auto;
-    font-size: 11px;
+    font-size: 0.733rem;
     color: var(--text-2);
     font-variant-numeric: tabular-nums;
+  }
+  .time.time-tag {
+    margin-left: 0;
+  }
+  .message.no-assistant-bubble .time.time-tag {
+    margin-left: auto;
+  }
+  .message.no-user-bubble .time.time-tag {
+    margin-left: auto;
+    color: var(--text-2);
   }
   .message.user .time {
     color: rgba(255, 255, 255, 0.7);
@@ -621,7 +694,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 12px;
+    font-size: 0.8rem;
     background: rgba(0, 0, 0, 0.2);
     border-radius: 6px;
     padding: 4px 8px;
@@ -671,7 +744,7 @@
     background: oklch(20% 0 0 / 0.8);
   }
   .img-caption {
-    font-size: 12px;
+    font-size: 0.8rem;
     color: var(--text-3);
     margin-top: 6px;
     font-style: italic;
@@ -776,7 +849,7 @@
     border-radius: 8px;
     padding: 10px 12px;
     border: 1px solid var(--border);
-    font-size: 14px;
+    font-size: 0.933rem;
     min-height: 160px;
     max-height: 480px;
     width: 100%;
@@ -800,7 +873,7 @@
   .btn-sm {
     padding: 5px 12px;
     border-radius: 7px;
-    font-size: 12px;
+    font-size: 0.8rem;
     font-weight: 500;
     background: var(--bg-4);
     color: var(--text-2);
@@ -857,7 +930,7 @@
      поэтому стрелки вариантов всегда у правого края bubble. */
   .toolbar {
     position: absolute;
-    bottom: -34px;
+    bottom: -38px;
     left: 0;
     right: 0;
     display: flex;
@@ -872,11 +945,6 @@
     opacity: 1;
     pointer-events: all;
   }
-  /* User-сообщение: только левый toolbar, его прижимаем к правому краю */
-  .msg-group.user .toolbar {
-    justify-content: flex-end;
-  }
-
   .toolbar-left,
   .toolbar-right {
     display: flex;
@@ -887,6 +955,20 @@
     border-radius: 8px;
     padding: 3px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  }
+  .message.no-assistant-bubble .toolbar-left,
+  .message.no-assistant-bubble .toolbar-right,
+  .msg-group.no-assistant-bubble-mode.user .toolbar-left,
+  .msg-group.no-assistant-bubble-mode.user .toolbar-right,
+  .msg-group.no-user-bubble-mode.user .toolbar-left,
+  .msg-group.no-user-bubble-mode.user .toolbar-right,
+  .msg-group.any-bubble-disabled .toolbar-left,
+  .msg-group.any-bubble-disabled .toolbar-right {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    box-shadow: none;
   }
   .delete-wrap {
     position: relative;
@@ -925,7 +1007,7 @@
     padding: 3px 8px;
     border-radius: 6px;
     color: var(--text-2);
-    font-size: 12px;
+    font-size: 0.8rem;
     white-space: nowrap;
   }
   .delete-choice button:hover {
@@ -954,11 +1036,22 @@
     cursor: default;
   }
   .var-count {
-    font-size: 11px;
+    font-size: 0.733rem;
     color: var(--text-3);
     padding: 0 4px;
     min-width: 32px;
     text-align: center;
     font-variant-numeric: tabular-nums;
+  }
+
+  @media (max-width: 700px) {
+    .message.assistant {
+      width: 100%;
+      max-width: 100%;
+    }
+    .message.no-assistant-bubble {
+      width: 100%;
+      max-width: 100%;
+    }
   }
 </style>

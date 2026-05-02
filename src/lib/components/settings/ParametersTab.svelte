@@ -239,7 +239,7 @@
     border-radius: 7px;
     padding: 6px 10px;
     color: var(--text);
-    font-size: 13px;
+    font-size: 0.867rem;
   }
   .text-input:focus {
     border-color: var(--accent-d);
@@ -273,7 +273,7 @@
     gap: 6px;
     padding: 6px 12px;
     border-radius: 7px;
-    font-size: 12px;
+    font-size: 0.8rem;
     background: var(--bg-3);
     border: 1px dashed var(--border);
     color: var(--text-3);
@@ -320,7 +320,7 @@
   }
   .preset-group {
     padding: 8px 8px 4px;
-    font-size: 11px;
+    font-size: 0.733rem;
     font-weight: 700;
     color: var(--text-3);
     text-transform: uppercase;
@@ -350,7 +350,7 @@
   .preset-key,
   .preset-value {
     font-family: "JetBrains Mono", monospace;
-    font-size: 12px;
+    font-size: 0.8rem;
   }
   .preset-key {
     color: var(--text);
@@ -364,7 +364,7 @@
   .preset-note,
   .preset-empty {
     color: var(--text-3);
-    font-size: 11px;
+    font-size: 0.733rem;
   }
   .preset-empty {
     padding: 12px 8px;

@@ -220,7 +220,7 @@
     background: var(--bg-3);
     border: 1px solid var(--border);
     color: var(--text-2);
-    font-size: 13px;
+    font-size: 0.867rem;
     white-space: nowrap;
     transition: background 0.12s, color 0.12s;
     max-width: min(200px, 34vw);
@@ -269,7 +269,7 @@
   }
   .dropdown-group {
     padding: 6px 10px 4px;
-    font-size: 11px;
+    font-size: 0.733rem;
     color: var(--text-3);
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -280,7 +280,7 @@
   .dropdown-status {
     padding: 8px 10px;
     color: var(--text-3);
-    font-size: 12px;
+    font-size: 0.8rem;
   }
   .dropdown-status.err {
     color: var(--danger);
@@ -296,7 +296,7 @@
     border-radius: 7px;
     padding: 0 10px;
     color: var(--text);
-    font-size: 12px;
+    font-size: 0.8rem;
   }
   .search-input:focus {
     border-color: var(--accent-d);
@@ -309,7 +309,7 @@
     padding: 7px 10px;
     border-radius: 7px;
     color: var(--text-2);
-    font-size: 13px;
+    font-size: 0.867rem;
     transition: background 0.1s;
     text-align: left;
   }
@@ -362,7 +362,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--text-3);
-    font-size: 11px;
+    font-size: 0.733rem;
   }
   .dropdown-divider {
     height: 1px;

@@ -805,6 +805,7 @@
             branchCount={branchInfo($activeChat, msg.id).count}
             branchLocked={generating}
             highlighted={highlightedMessageId === msg.id}
+            alwaysShowToolbar={msg.id === visibleMessages[visibleMessages.length - 1]?.id}
             onEdit={(c) => onEditMessage(msg.id, c)}
             onSendEdit={(c) => onSendEditedUser(msg.id, c)}
             onDelete={() => onDeleteMessage(msg.id)}
@@ -949,7 +950,7 @@
     border-radius: 7px;
     background: var(--bg-4);
     color: var(--text-2);
-    font-size: 12px;
+    font-size: 0.8rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -980,13 +981,13 @@
     border: 1px solid var(--border);
   }
   .empty-logo {
-    font-size: 40px;
+    font-size: 2.667rem;
     font-weight: 700;
     color: var(--accent);
     letter-spacing: -0.02em;
   }
   .empty-sub {
-    font-size: 14px;
+    font-size: 0.933rem;
   }
 
   .msg-group {
@@ -1004,7 +1005,7 @@
     border-bottom-left-radius: 4px;
   }
   .role {
-    font-size: 10px;
+    font-size: 0.667rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -1032,7 +1033,7 @@
   }
   .typing-label {
     color: var(--text-2);
-    font-size: 13px;
+    font-size: 0.867rem;
   }
   @keyframes bounce {
     0%,
@@ -1054,7 +1055,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
+    font-size: 0.8rem;
     color: oklch(62% 0.08 280);
   }
   .imgmode-banner {
@@ -1064,7 +1065,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
+    font-size: 0.8rem;
     color: var(--accent);
   }
 
@@ -1076,7 +1077,7 @@
     border: 1px solid var(--danger);
     color: oklch(80% 0.05 25);
     border-radius: 8px;
-    font-size: 12px;
+    font-size: 0.8rem;
     display: flex;
     align-items: flex-start;
     gap: 8px;
@@ -1092,7 +1093,7 @@
     border: none;
     color: oklch(60% 0.05 25);
     cursor: pointer;
-    font-size: 16px;
+    font-size: 1.067rem;
     line-height: 1;
     padding: 0;
     margin-top: -1px;

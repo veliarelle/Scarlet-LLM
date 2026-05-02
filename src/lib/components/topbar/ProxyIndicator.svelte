@@ -44,7 +44,7 @@
     background: var(--bg-3);
     border: 1px solid var(--border);
     color: var(--text-2);
-    font-size: 13px;
+    font-size: 0.867rem;
     transition: background 0.12s, color 0.12s;
     max-width: min(180px, 30vw);
     min-width: 0;

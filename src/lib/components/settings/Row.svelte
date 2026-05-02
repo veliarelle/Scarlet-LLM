@@ -36,7 +36,7 @@
     gap: 1px;
   }
   .row-hint {
-    font-size: 11px;
+    font-size: 0.733rem;
     color: var(--text-3);
   }
   .row-control {

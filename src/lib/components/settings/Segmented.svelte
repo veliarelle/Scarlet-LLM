@@ -35,7 +35,7 @@
   .seg-btn {
     padding: 4px 12px;
     border-radius: 6px;
-    font-size: 12px;
+    font-size: 0.8rem;
     color: var(--text-3);
     transition: background 0.12s, color 0.12s;
   }

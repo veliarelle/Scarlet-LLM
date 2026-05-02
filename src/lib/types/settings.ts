@@ -91,11 +91,15 @@ export interface Settings {
   active_chat_id: string | null;
   user_name: string;
   assistant_name: string;
+  show_user_name: boolean;
+  show_assistant_name: boolean;
   streaming: boolean;
   context_window: number;
   max_tokens: number;
   max_message_size: number;
   show_token_counts: boolean;
+  show_message_models: boolean;
+  show_message_time: boolean;
   prompt_caching: boolean;
   params: ParamEntry[];
   reasoning: ReasoningConfig;
@@ -109,6 +113,9 @@ export interface Settings {
   theme: Theme;
   custom_colors: Record<string, string>;
   ui_scale: number;
+  text_scale: number;
+  user_bubbles: boolean;
+  assistant_bubbles: boolean;
   translucent_sidebar: boolean;
   sidebar_blur: number;
   translucent_topbar: boolean;
@@ -124,11 +131,15 @@ export const DEFAULT_SETTINGS: Settings = {
   active_chat_id: null,
   user_name: "User",
   assistant_name: "Scarlet",
+  show_user_name: true,
+  show_assistant_name: true,
   streaming: true,
   context_window: 8192,
   max_tokens: 2048,
   max_message_size: 0,
   show_token_counts: false,
+  show_message_models: true,
+  show_message_time: true,
   prompt_caching: false,
   params: [
     { id: "tp", key: "temperature", value: "0.7", enabled: true },
@@ -148,6 +159,9 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: "dark",
   custom_colors: {},
   ui_scale: 1.0,
+  text_scale: 1.0,
+  user_bubbles: true,
+  assistant_bubbles: true,
   translucent_sidebar: false,
   sidebar_blur: 8,
   translucent_topbar: false,

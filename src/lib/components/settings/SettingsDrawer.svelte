@@ -33,6 +33,12 @@
     overlayPointerDown = false;
     if (shouldClose) close();
   }
+  function onTabsWheel(e: WheelEvent) {
+    const el = e.currentTarget as HTMLElement;
+    if (el.scrollWidth <= el.clientWidth) return;
+    e.preventDefault();
+    el.scrollLeft += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+  }
 </script>
 
 {#if $settingsOpen}
@@ -52,7 +58,7 @@
         </button>
       </div>
 
-      <div class="tabs">
+      <div class="tabs" onwheel={onTabsWheel}>
         {#each TABS as t (t.id)}
           <button
             class="tab"
@@ -125,7 +131,7 @@
     justify-content: space-between;
     padding: 16px 18px;
     border-bottom: 1px solid var(--border);
-    font-size: 15px;
+    font-size: 1rem;
     font-weight: 600;
   }
   .close-btn {
@@ -142,12 +148,25 @@
     padding: 8px 10px;
     border-bottom: 1px solid var(--border);
     overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .tabs::after {
+    content: "";
+    flex: 0 0 10px;
+  }
+  .tabs::-webkit-scrollbar {
+    display: none;
   }
   .tab {
+    flex: 0 0 auto;
     padding: 5px 11px;
     border-radius: 7px;
-    font-size: 12px;
+    font-size: 0.8rem;
     color: var(--text-3);
     white-space: nowrap;
     transition: background 0.1s, color 0.1s;

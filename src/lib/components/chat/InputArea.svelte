@@ -433,7 +433,7 @@
     border-radius: 8px;
     padding: 3px 6px 3px 8px;
     max-width: 180px;
-    font-size: 12px;
+    font-size: 0.8rem;
     color: var(--text-2);
   }
   .att-icon {
@@ -481,7 +481,7 @@
   }
   .textarea {
     flex: 1;
-    font-size: 14px;
+    font-size: 0.933rem;
     line-height: 1.6;
     max-height: 240px;
     overflow-y: auto;
@@ -549,7 +549,7 @@
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--meter-color) 16%, transparent);
   }
   .context-number {
-    font-size: 9px;
+    font-size: 0.6rem;
     font-family: "JetBrains Mono", monospace;
     font-weight: 600;
     line-height: 1;
@@ -576,7 +576,7 @@
     align-items: baseline;
     justify-content: space-between;
     gap: 10px;
-    font-size: 11px;
+    font-size: 0.733rem;
     font-family: "JetBrains Mono", monospace;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -590,7 +590,7 @@
     border-radius: 7px;
     background: var(--bg-4);
     color: var(--text-2);
-    font-size: 12px;
+    font-size: 0.8rem;
   }
   .context-action:hover:not(:disabled) {
     color: var(--text);

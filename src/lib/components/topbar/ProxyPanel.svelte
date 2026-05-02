@@ -234,7 +234,7 @@
     gap: 8px;
     padding: 12px 14px;
     border-bottom: 1px solid var(--border);
-    font-size: 13px;
+    font-size: 0.867rem;
     font-weight: 600;
   }
   .hdr-close {
@@ -254,7 +254,7 @@
   }
   .empty {
     color: var(--text-3);
-    font-size: 13px;
+    font-size: 0.867rem;
     padding: 12px;
     text-align: center;
   }
@@ -293,12 +293,12 @@
   }
   .name {
     display: block;
-    font-size: 13px;
+    font-size: 0.867rem;
     font-weight: 500;
   }
   .url {
     display: block;
-    font-size: 11px;
+    font-size: 0.733rem;
     color: var(--text-3);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -340,7 +340,7 @@
     padding: 6px 10px;
     width: 100%;
     color: var(--text);
-    font-size: 13px;
+    font-size: 0.867rem;
   }
   .entry-edit .text-input {
     background: var(--bg-2);
@@ -367,7 +367,7 @@
     background: var(--accent-d);
     border: 1px solid color-mix(in srgb, var(--accent-d) 72%, white);
     color: white;
-    font-size: 12px;
+    font-size: 0.8rem;
     font-weight: 600;
     transition: background 0.12s, border-color 0.12s;
   }
@@ -386,7 +386,7 @@
     width: 100%;
     padding: 10px 14px;
     color: var(--text-3);
-    font-size: 13px;
+    font-size: 0.867rem;
     border-top: 1px solid var(--border);
     transition: background 0.1s, color 0.1s;
   }
