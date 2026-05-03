@@ -19,7 +19,10 @@ The app is aimed at simplicity and minimal design - similar to claude/chatgpt of
 ## Plans
 
 - Chat groups (claude-like projects);
-- Idk for now.
+- Complete markdown support (.md);
+- Terminal mode;
+- Chat tabs and split view;
+- Regex post-processing. 
 
 ## Tech Stack
 
