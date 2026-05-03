@@ -6,14 +6,13 @@ app settings.
 
 The app is aimed at simplicity and minimal design - similar to claude/chatgpt official apps and websites.
 
-## Features
+## Key features
 
-- Chat with OpenAI, Anthropic, Google, and OpenAI-compatible APIs;
+- Chat with OpenAI, Anthropic, Google, Openrouter and OpenAI-compatible APIs;
 - Local oai-reserve proxy manager, together with API keys support;
-- Image generation mode for supported Google and OpenAI image models;
+- Image generation mode;
 - File and image attachments in chats and image-generation requests;
-- Prompt and parameter managers. Scarlet LLM does not send anything by default;
-- Chat history, message variations, forks, and regeneration;
+- Prompt and parameter managers. Scarlet LLM does not send any parameters by default;
 - Agents, custom tools usage.
 
 ## Plans
